@@ -1,0 +1,34 @@
+# ── Environment secrets ──
+.env
+
+# ── TLS certificates (generated locally) ──
+nginx/ssl/*.crt
+nginx/ssl/*.key
+
+# ── Docker volumes / data ──
+postgres_data/
+openbao_data/
+elasticsearch_data/
+
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs ──
+*.log
+logs/

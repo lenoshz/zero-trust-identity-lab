@@ -1,0 +1,113 @@
+# ═══════════════════════════════════════════════════════
+# Filebeat Configuration — Zero Trust Lab
+# Ships Keycloak + Nginx logs to Elasticsearch
+# ═══════════════════════════════════════════════════════
+
+# ── Inputs ──
+filebeat.inputs:
+
+  # Keycloak logs
+  - type: log
+    id: keycloak-logs
+    enabled: true
+    paths:
+      - /var/log/keycloak/*.log
+    fields:
+      source: keycloak
+      environment: zero-trust-lab
+    fields_under_root: true
+    multiline:
+      pattern: '^\d{4}-\d{2}-\d{2}'
+      negate: true
+      match: after
+    processors:
+      - decode_json_fields:
+          fields: ["message"]
+          target: "keycloak"
+          overwrite_keys: true
+          add_error_key: true
+          when:
+            regexp:
+              message: '^\{'
+
+  # Nginx access logs (JSON format)
+  - type: log
+    id: nginx-access-logs
+    enabled: true
+    paths:
+      - /var/log/nginx/access.log
+    fields:
+      source: nginx
+      log_type: access
+      environment: zero-trust-lab
+    fields_under_root: true
+    json.keys_under_root: true
+    json.add_error_key: true
+    json.message_key: request_uri
+
+  # Nginx error logs
+  - type: log
+    id: nginx-error-logs
+    enabled: true
+    paths:
+      - /var/log/nginx/error.log
+    fields:
+      source: nginx
+      log_type: error
+      environment: zero-trust-lab
+    fields_under_root: true
+
+# ── Docker container log autodiscovery ──
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      hints.default_config:
+        type: container
+        paths:
+          - /var/lib/docker/containers/${data.container.id}/*.log
+        processors:
+          - add_docker_metadata:
+              host: "unix:///var/run/docker.sock"
+
+# ── Processors ──
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+      match_fields: ["system.process.cgroup.id"]
+      match_pids: ["process.pid", "process.ppid"]
+      match_source: true
+      match_source_index: 4
+      match_short_id: false
+      cleanup_timeout: 60
+
+# ── Output: Elasticsearch ──
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  username: "elastic"
+  password: "${ELASTIC_PASSWORD}"
+  index: "zerotrust-logs-%{+yyyy.MM.dd}"
+
+# ── Index template ──
+setup.template.name: "zerotrust-logs"
+setup.template.pattern: "zerotrust-logs-*"
+setup.template.enabled: true
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+
+# Disable ILM (use simple index pattern)
+setup.ilm.enabled: false
+
+# ── Kibana for dashboards ──
+setup.kibana:
+  host: "http://kibana:5601/kibana"
+  username: "elastic"
+  password: "${ELASTIC_PASSWORD}"
+
+# ── Logging ──
+logging.level: info
+logging.to_files: false
+logging.to_stderr: true

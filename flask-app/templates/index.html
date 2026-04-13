@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Zero Trust Identity & Secrets Management Lab — Demonstrating enterprise-grade IAM with Keycloak, OpenBao, and ELK Stack.">
+    <title>Zero Trust Identity Lab</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root { --zt-primary: #0d6efd; --zt-success: #198754; --zt-danger: #dc3545; --zt-dark: #0a0e17; }
+        body { background: var(--zt-dark); min-height: 100vh; }
+        .hero-section { 
+            background: linear-gradient(135deg, #0a0e17 0%, #1a1e2e 50%, #0d1b2a 100%);
+            min-height: 60vh; display: flex; align-items: center;
+            border-bottom: 1px solid rgba(13,110,253,0.2);
+        }
+        .glow-text { text-shadow: 0 0 20px rgba(13,110,253,0.3); }
+        .status-card { 
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px; transition: all 0.3s ease;
+        }
+        .status-card:hover { 
+            background: rgba(255,255,255,0.06); border-color: rgba(13,110,253,0.3);
+            transform: translateY(-2px);
+        }
+        .status-indicator { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+        .status-indicator.online { background: #198754; box-shadow: 0 0 8px rgba(25,135,84,0.6); }
+        .status-indicator.offline { background: #dc3545; box-shadow: 0 0 8px rgba(220,53,69,0.6); }
+        .nav-zt { background: rgba(10,14,23,0.95); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .feature-icon { font-size: 2rem; color: var(--zt-primary); margin-bottom: 1rem; }
+        .btn-zt { 
+            background: linear-gradient(135deg, #0d6efd, #0a58ca); border: none;
+            padding: 12px 32px; font-weight: 600; letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+        .btn-zt:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(13,110,253,0.4); }
+        .architecture-box { 
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.75rem;
+            color: #8b949e; overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg nav-zt fixed-top">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="bi bi-shield-lock-fill text-primary me-2"></i>
+                <span class="fw-bold">Zero Trust Lab</span>
+            </a>
+            <div class="navbar-nav ms-auto d-flex flex-row gap-3">
+                {% if user %}
+                <a class="nav-link" href="/dashboard"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+                <a class="nav-link" href="/secrets"><i class="bi bi-key-fill me-1"></i>Secrets</a>
+                <a class="nav-link text-danger" href="/logout"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+                {% else %}
+                <a class="nav-link" href="/login"><i class="bi bi-box-arrow-in-right me-1"></i>Sign In</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section" style="padding-top: 80px;">
+        <div class="container text-center">
+            <div class="mb-4">
+                <i class="bi bi-shield-check" style="font-size: 4rem; color: var(--zt-primary);"></i>
+            </div>
+            <h1 class="display-4 fw-bold glow-text mb-3">
+                Zero Trust Identity Lab
+            </h1>
+            <p class="lead text-secondary mb-2" style="max-width: 700px; margin: 0 auto;">
+                Enterprise-grade Identity & Access Management with Keycloak SSO, 
+                OpenBao Secrets Engine, and real-time SIEM monitoring.
+            </p>
+            <p class="text-secondary small mb-4">
+                <i class="bi bi-lock-fill me-1"></i>Never Trust, Always Verify
+            </p>
+            {% if not user %}
+            <a href="/login" class="btn btn-zt btn-lg text-white">
+                <i class="bi bi-box-arrow-in-right me-2"></i>Authenticate with Keycloak
+            </a>
+            {% else %}
+            <a href="/dashboard" class="btn btn-zt btn-lg text-white">
+                <i class="bi bi-speedometer2 me-2"></i>Go to Dashboard
+            </a>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Status Section -->
+    <section class="py-5">
+        <div class="container">
+            <h2 class="text-center mb-4 fw-bold">
+                <i class="bi bi-activity me-2 text-primary"></i>System Status
+            </h2>
+            <div class="row g-4 justify-content-center">
+                <!-- Keycloak -->
+                <div class="col-md-4">
+                    <div class="status-card p-4 h-100">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="status-indicator {{ 'online' if keycloak_status else 'offline' }} me-3"></span>
+                            <h5 class="mb-0">Keycloak IdP</h5>
+                        </div>
+                        <p class="text-secondary small mb-2">OpenID Connect / SSO Provider</p>
+                        <span class="badge {{ 'bg-success' if keycloak_status else 'bg-danger' }}">
+                            {{ 'Operational' if keycloak_status else 'Unreachable' }}
+                        </span>
+                    </div>
+                </div>
+                <!-- OpenBao -->
+                <div class="col-md-4">
+                    <div class="status-card p-4 h-100">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="status-indicator {{ 'online' if openbao_status else 'offline' }} me-3"></span>
+                            <h5 class="mb-0">OpenBao Vault</h5>
+                        </div>
+                        <p class="text-secondary small mb-2">Secrets Management Engine</p>
+                        <span class="badge {{ 'bg-success' if openbao_status else 'bg-danger' }}">
+                            {{ 'Operational' if openbao_status else 'Unreachable' }}
+                        </span>
+                    </div>
+                </div>
+                <!-- Nginx -->
+                <div class="col-md-4">
+                    <div class="status-card p-4 h-100">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="status-indicator online me-3"></span>
+                            <h5 class="mb-0">Nginx Gateway</h5>
+                        </div>
+                        <p class="text-secondary small mb-2">TLS Reverse Proxy</p>
+                        <span class="badge bg-success">Operational</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Zero Trust Principles -->
+    <section class="py-5" style="background: rgba(255,255,255,0.01);">
+        <div class="container">
+            <h2 class="text-center mb-5 fw-bold">
+                <i class="bi bi-shield-fill-check me-2 text-primary"></i>Zero Trust Principles
+            </h2>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="status-card p-4 text-center h-100">
+                        <div class="feature-icon"><i class="bi bi-fingerprint"></i></div>
+                        <h5>Never Trust, Always Verify</h5>
+                        <p class="text-secondary small">Every request is authenticated and authorized via Keycloak OIDC tokens.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="status-card p-4 text-center h-100">
+                        <div class="feature-icon"><i class="bi bi-clock-history"></i></div>
+                        <h5>Short-Lived Tokens</h5>
+                        <p class="text-secondary small">Access tokens expire in 5 minutes. Sessions max out at 1 hour.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="status-card p-4 text-center h-100">
+                        <div class="feature-icon"><i class="bi bi-key"></i></div>
+                        <h5>Secrets Never Hardcoded</h5>
+                        <p class="text-secondary small">All secrets fetched at runtime from OpenBao — never in code or env vars.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="status-card p-4 text-center h-100">
+                        <div class="feature-icon"><i class="bi bi-person-check"></i></div>
+                        <h5>Least Privilege Access</h5>
+                        <p class="text-secondary small">Role-based access control with granular policies for each service.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="status-card p-4 text-center h-100">
+                        <div class="feature-icon"><i class="bi bi-graph-up"></i></div>
+                        <h5>Continuous Monitoring</h5>
+                        <p class="text-secondary small">All identity events shipped to ELK Stack for real-time threat detection.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="status-card p-4 text-center h-100">
+                        <div class="feature-icon"><i class="bi bi-lock-fill"></i></div>
+                        <h5>TLS Everywhere</h5>
+                        <p class="text-secondary small">Nginx enforces HTTPS with HSTS headers on all traffic.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Architecture Preview -->
+    <section class="py-5">
+        <div class="container">
+            <h2 class="text-center mb-4 fw-bold">
+                <i class="bi bi-diagram-3 me-2 text-primary"></i>Architecture
+            </h2>
+            <div class="architecture-box p-4 mx-auto" style="max-width: 780px;">
+<pre class="mb-0" style="color: #8b949e;">
+┌─────────────┐     HTTPS/443     ┌──────────────────┐
+│   Browser   │ ────────────────► │   Nginx (TLS)    │
+└─────────────┘                   │  Reverse Proxy   │
+                                  └──────┬───────────┘
+                        ┌────────────────┼────────────────┐
+                        ▼                ▼                ▼
+                ┌──────────────┐ ┌──────────────┐ ┌────────────┐
+                │   Keycloak   │ │  Flask App   │ │   Kibana   │
+                │  (IdP/SSO)   │ │  (Demo App)  │ │   (SIEM)   │
+                └──────┬───────┘ └──────┬───────┘ └────────────┘
+                       │                │                ▲
+                       ▼                ▼                │
+                ┌──────────────┐ ┌──────────────┐ ┌────────────┐
+                │  PostgreSQL  │ │   OpenBao    │ │ Filebeat → │
+                │   (DB)       │ │  (Secrets)   │ │ Elastic    │
+                └──────────────┘ └──────────────┘ └────────────┘
+</pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-4 text-center text-secondary border-top border-secondary border-opacity-10">
+        <div class="container">
+            <p class="mb-1 small">
+                <i class="bi bi-shield-lock-fill me-1 text-primary"></i>
+                Zero Trust Identity Lab &mdash; Portfolio Project
+            </p>
+            <p class="mb-0 small text-secondary">
+                Keycloak 24 &bull; OpenBao 2.0 &bull; Nginx 1.25 &bull; ELK 8.13
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

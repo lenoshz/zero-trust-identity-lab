@@ -1,0 +1,11 @@
+# ═══════════════════════════════════════════════════════
+# Filebeat Keycloak Module Configuration
+# Parses Keycloak identity events for SIEM analysis
+# ═══════════════════════════════════════════════════════
+
+- module: keycloak
+  log:
+    enabled: true
+    var.paths:
+      - /var/log/keycloak/*.log
+    var.format: json

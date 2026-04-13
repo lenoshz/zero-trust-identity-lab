@@ -1,0 +1,284 @@
+{
+  "id": "zero-trust-realm",
+  "realm": "zero-trust-realm",
+  "displayName": "Zero Trust Lab",
+  "displayNameHtml": "<strong>Zero Trust</strong> Identity Lab",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "passwordPolicy": "length(8) and upperCase(1) and digits(1) and specialChars(1)",
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 3600,
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 300,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespan": 5184000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "eventsEnabled": true,
+  "eventsExpiration": 604800,
+  "eventsListeners": ["jboss-logging"],
+  "enabledEventTypes": [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT",
+    "LOGOUT_ERROR",
+    "REGISTER",
+    "REGISTER_ERROR",
+    "CODE_TO_TOKEN",
+    "CODE_TO_TOKEN_ERROR",
+    "CLIENT_LOGIN",
+    "CLIENT_LOGIN_ERROR",
+    "FEDERATED_IDENTITY_LINK",
+    "REMOVE_FEDERATED_IDENTITY",
+    "UPDATE_EMAIL",
+    "UPDATE_PROFILE",
+    "UPDATE_PASSWORD",
+    "UPDATE_TOTP",
+    "VERIFY_EMAIL",
+    "SEND_RESET_PASSWORD",
+    "RESET_PASSWORD",
+    "IMPERSONATE",
+    "CUSTOM_REQUIRED_ACTION",
+    "GRANT_CONSENT",
+    "UPDATE_CONSENT",
+    "REVOKE_GRANT",
+    "TOKEN_EXCHANGE",
+    "PERMISSION_TOKEN"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "requiredActions": [
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 10,
+      "config": {}
+    },
+    {
+      "alias": "VERIFY_EMAIL",
+      "name": "Verify Email",
+      "providerId": "VERIFY_EMAIL",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 50,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PROFILE",
+      "name": "Update Profile",
+      "providerId": "UPDATE_PROFILE",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 40,
+      "config": {}
+    }
+  ],
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyPeriod": 30,
+  "roles": {
+    "realm": [
+      {
+        "name": "zero-trust-admin",
+        "description": "Full administrative access in the Zero Trust lab",
+        "composite": false
+      },
+      {
+        "name": "zero-trust-user",
+        "description": "Standard user access with read/write permissions",
+        "composite": false
+      },
+      {
+        "name": "zero-trust-readonly",
+        "description": "Read-only access to the Zero Trust lab",
+        "composite": false
+      }
+    ],
+    "client": {
+      "flask-demo-app": [
+        {
+          "name": "app-admin",
+          "description": "Admin role in the Flask demo app"
+        },
+        {
+          "name": "app-user",
+          "description": "Standard user role in the Flask demo app"
+        }
+      ]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "flask-demo-app",
+      "name": "Flask Demo Application",
+      "description": "Zero Trust Flask demo application",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "flask-demo-secret-2024",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "https://localhost/app/*",
+        "http://localhost:5000/*",
+        "https://localhost/*",
+        "http://localhost/*"
+      ],
+      "webOrigins": [
+        "https://localhost",
+        "http://localhost:5000",
+        "http://localhost"
+      ],
+      "baseUrl": "https://localhost/app/",
+      "adminUrl": "",
+      "rootUrl": "https://localhost",
+      "bearerOnly": false,
+      "consentRequired": false,
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "realm_roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "ztadmin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "ZT",
+      "lastName": "Admin",
+      "email": "ztadmin@zerotrust.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "zero-trust-admin",
+        "default-roles-zero-trust-realm"
+      ],
+      "clientRoles": {
+        "flask-demo-app": ["app-admin"]
+      }
+    },
+    {
+      "username": "ztuser",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "ZT",
+      "lastName": "User",
+      "email": "ztuser@zerotrust.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "zero-trust-user",
+        "default-roles-zero-trust-realm"
+      ],
+      "clientRoles": {
+        "flask-demo-app": ["app-user"]
+      }
+    },
+    {
+      "username": "ztviewer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "ZT",
+      "lastName": "Viewer",
+      "email": "ztviewer@zerotrust.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "View@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "zero-trust-readonly",
+        "default-roles-zero-trust-realm"
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "web-origins",
+    "acr",
+    "profile",
+    "roles",
+    "email"
+  ],
+  "defaultOptionalClientScopes": [
+    "address",
+    "phone",
+    "offline_access",
+    "microprofile-jwt"
+  ],
+  "browserFlow": "browser",
+  "registrationFlow": "registration",
+  "directGrantFlow": "direct grant",
+  "resetCredentialsFlow": "reset credentials",
+  "clientAuthenticationFlow": "clients"
+}

@@ -1,0 +1,27 @@
+# ═══════════════════════════════════════════════════════
+# Kibana Configuration — Zero Trust Lab
+# Connected to Elasticsearch with security
+# ═══════════════════════════════════════════════════════
+
+server.host: "0.0.0.0"
+server.port: 5601
+server.name: "zerotrust-kibana"
+
+# Base path for reverse proxy
+server.basePath: "/kibana"
+server.rewriteBasePath: true
+
+# Elasticsearch connection
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+elasticsearch.username: "kibana_system"
+elasticsearch.password: "${KIBANA_PASSWORD}"
+
+# Security
+xpack.security.enabled: true
+xpack.encryptedSavedObjects.encryptionKey: "zerotrust-kibana-encryption-key-32chars!"
+
+# Monitoring
+monitoring.ui.container.elasticsearch.enabled: true
+
+# Logging
+logging.root.level: info
