@@ -108,6 +108,14 @@
                         <span class="badge {{ 'bg-success' if keycloak_status else 'bg-danger' }}">
                             {{ 'Operational' if keycloak_status else 'Unreachable' }}
                         </span>
+                        {% if debug_health %}
+                        <p class="text-secondary small mt-2 mb-0">
+                            probe={{ debug_health.probe_url }}
+                            code={{ debug_health.response_code }}
+                            fallback={{ debug_health.fallback_url }}
+                            err={{ debug_health.exception }}
+                        </p>
+                        {% endif %}
                     </div>
                 </div>
                 <!-- OpenBao -->

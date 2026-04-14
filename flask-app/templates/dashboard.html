@@ -22,6 +22,10 @@
         .nav-pills .nav-link { color: #8b949e; border-radius: 8px; }
         .nav-pills .nav-link.active { background: rgba(13,110,253,0.15); color: #0d6efd; }
         .info-label { color: #6c757d; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .token-chip { font-size: 0.75rem; letter-spacing: 0.3px; }
+        .health-grid td { font-size: 0.85rem; }
+        .audit-row { border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .audit-row:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
@@ -54,6 +58,11 @@
                     <a class="nav-link {{ 'active' if active_page == 'secrets' }}" href="/app/secrets">
                         <i class="bi bi-key-fill me-2"></i>Secrets
                     </a>
+                    {% if user.is_admin %}
+                    <a class="nav-link {{ 'active' if active_page == 'admin' }}" href="/app/admin">
+                        <i class="bi bi-person-gear me-2"></i>Admin
+                    </a>
+                    {% endif %}
                     <hr class="border-secondary border-opacity-25">
                     <a class="nav-link" href="/app/">
                         <i class="bi bi-house me-2"></i>Home
@@ -89,13 +98,48 @@
                     </div>
                     <div class="col-md-3">
                         <div class="card-zt p-3">
-                            <div class="info-label">Token Expiry</div>
-                            <div class="fw-bold text-warning" style="font-size: 0.9rem;">
-                                <i class="bi bi-clock me-1"></i>{{ user.token_expiry }}
+                            <div class="info-label">Issued At</div>
+                            <div class="fw-bold text-info" style="font-size: 0.85rem;">
+                                <i class="bi bi-clock-history me-1"></i>{{ user.token_issued }}
                             </div>
                         </div>
                     </div>
                     <div class="col-md-3">
+                        <div class="card-zt p-3">
+                            <div class="info-label">Expires At</div>
+                            <div class="fw-bold text-warning" style="font-size: 0.85rem;">
+                                <i class="bi bi-hourglass-split me-1"></i>{{ user.token_expiry }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="card-zt p-3">
+                            <div class="info-label">Remaining</div>
+                            <div class="fw-bold" id="token-remaining" data-seconds="{{ user.remaining_seconds if user.remaining_seconds is not none else '' }}">
+                                {{ user.remaining_time }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card-zt p-3">
+                            <div class="info-label">Token Status</div>
+                            <div>
+                                {% if user.token_status == 'valid' %}
+                                <span class="badge bg-success token-chip">VALID</span>
+                                {% elif user.token_status == 'expiring_soon' %}
+                                <span class="badge bg-warning text-dark token-chip">EXPIRING SOON</span>
+                                {% elif user.token_status == 'expired' %}
+                                <span class="badge bg-danger token-chip">EXPIRED</span>
+                                {% else %}
+                                <span class="badge bg-secondary token-chip">UNKNOWN</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
                         <div class="card-zt p-3">
                             <div class="info-label">OpenBao Status</div>
                             <div>
@@ -150,6 +194,10 @@
                                 <tr>
                                     <td class="text-secondary">Token Type</td>
                                     <td><span class="badge bg-warning bg-opacity-25 text-warning">JWT (5min TTL)</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-secondary">Auth Time</td>
+                                    <td><code>{{ user.auth_time }}</code></td>
                                 </tr>
                                 <tr>
                                     <td class="text-secondary">Session Max</td>
@@ -229,6 +277,82 @@
                         <li>In production, tokens would be rotated and scoped to least-privilege policies</li>
                     </ul>
                 </div>
+
+                {% elif active_page == 'admin' %}
+                <!-- ═══ ADMIN VIEW ═══ -->
+                <h3 class="fw-bold mb-4">
+                    <i class="bi bi-person-gear text-primary me-2"></i>Admin Panel
+                </h3>
+
+                <div class="card-zt p-4 mb-3">
+                    <h5 class="mb-3"><i class="bi bi-shield-lock me-2 text-primary"></i>RBAC Guard</h5>
+                    <p class="text-secondary mb-2">This route is restricted to users with role <code>zero-trust-admin</code>.</p>
+                    <div>
+                        <span class="badge bg-success bg-opacity-25 text-success">Authorized</span>
+                        <span class="text-secondary small ms-2">User {{ user.username }} passed admin role guard.</span>
+                    </div>
+                </div>
+
+                <div class="card-zt p-4">
+                    <h6 class="mb-3">Current Roles</h6>
+                    {% for role in user.all_roles %}
+                    <span class="badge bg-secondary bg-opacity-25 text-secondary role-badge me-1 mb-1">{{ role }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if active_page == 'dashboard' %}
+                <div class="row g-3 mt-1">
+                    <div class="col-lg-6">
+                        <div class="card-zt p-4 h-100">
+                            <h5 class="mb-3"><i class="bi bi-journal-text me-2 text-primary"></i>Audit Log</h5>
+                            {% if audit_logs %}
+                            <div style="max-height: 280px; overflow:auto;">
+                                {% for ev in audit_logs | reverse %}
+                                <div class="py-2 audit-row">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong class="small">{{ ev.action }}</strong>
+                                        <span class="badge {{ 'bg-success' if ev.status == 'ok' else ('bg-warning text-dark' if ev.status == 'warning' else 'bg-danger') }}">{{ ev.status }}</span>
+                                    </div>
+                                    <div class="text-secondary small">{{ ev.ts }}</div>
+                                    {% if ev.detail %}<div class="small">{{ ev.detail }}</div>{% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="text-secondary small mb-0">No events yet.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card-zt p-4 h-100">
+                            <h5 class="mb-3"><i class="bi bi-heart-pulse me-2 text-primary"></i>Live Health</h5>
+                            <table class="table table-sm table-borderless mb-0 health-grid">
+                                <thead>
+                                    <tr>
+                                        <th>Service</th>
+                                        <th>Code</th>
+                                        <th>Latency</th>
+                                        <th>Checked</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for name in ['keycloak', 'openbao', 'nginx'] %}
+                                    {% set svc = live_health[name] if live_health else None %}
+                                    <tr>
+                                        <td>
+                                            <span class="badge {{ 'bg-success' if svc and svc.healthy else 'bg-danger' }}">{{ name }}</span>
+                                        </td>
+                                        <td>{{ svc.response_code if svc and svc.response_code is not none else 'N/A' }}</td>
+                                        <td>{{ (svc.latency_ms ~ 'ms') if svc and svc.latency_ms is not none else 'N/A' }}</td>
+                                        <td class="text-secondary">{{ svc.checked_at if svc else 'N/A' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
                 {% endif %}
 
             </div>
@@ -236,5 +360,29 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (function () {
+            const node = document.getElementById('token-remaining');
+            if (!node) return;
+
+            let remaining = parseInt(node.dataset.seconds, 10);
+            if (Number.isNaN(remaining)) return;
+
+            function render() {
+                if (remaining <= 0) {
+                    node.textContent = 'Expired';
+                    return;
+                }
+                const h = Math.floor(remaining / 3600);
+                const m = Math.floor((remaining % 3600) / 60);
+                const s = remaining % 60;
+                node.textContent = h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+                remaining -= 1;
+            }
+
+            render();
+            setInterval(render, 1000);
+        })();
+    </script>
 </body>
 </html>

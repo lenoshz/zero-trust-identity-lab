@@ -196,9 +196,12 @@ Navigate to `https://localhost/kibana` and explore the `zerotrust-logs-*` index 
 > 
 > 1. Flask app landing page showing system status
 > 2. Keycloak OIDC login page
-> 3. Identity dashboard with role information
+> 3. Identity dashboard showing token issued/expires/remaining + status chip
 > 4. Secrets page with masked OpenBao values
-> 5. Kibana dashboard showing identity events
+> 5. Admin page RBAC guard (`/app/admin`) for admin role
+> 6. Audit log panel with login/logout/secrets/admin events
+> 7. Live health panel showing response code, latency, and checked timestamp
+> 8. Kibana dashboard showing identity events
 
 ---
 
@@ -326,6 +329,32 @@ Expected quick checks:
 - App endpoint returns `HTTP/1.1 200 OK`
 - Flask logs show resolved OIDC settings and login redirect URI
 - Nginx logs show `/auth/` and `/app/` requests without upstream resolution crashes
+
+### Token Timing, RBAC, and Audit Verification
+
+```bash
+# 1) Verify session token timing fields are populated after login callback
+docker compose logs --tail=200 flask-app
+
+# 2) Verify app health endpoint includes live check metadata
+curl -k https://localhost/app/health
+
+# 3) Verify RBAC guards
+#   - /app/secrets allows zero-trust-admin and zero-trust-user
+#   - /app/admin allows zero-trust-admin only
+curl -kI https://localhost/app/secrets
+curl -kI https://localhost/app/admin
+
+# 4) Verify OpenBao access with app-scoped token from Flask container
+docker compose exec -T flask-app python -c "import requests; tok=open('/run/secrets/openbao/flask-app-token','r',encoding='utf-8').read().strip(); base='http://openbao:8200/v1'; hdr={'X-Vault-Token':tok}; print('db',requests.get(f'{base}/secret/data/flask-app/db',headers=hdr,timeout=5).status_code); print('api',requests.get(f'{base}/secret/data/flask-app/api',headers=hdr,timeout=5).status_code); print('config',requests.get(f'{base}/secret/data/flask-app/config',headers=hdr,timeout=5).status_code)"
+```
+
+Expected:
+- Dashboard shows issued time, expiry time, remaining countdown, and token status chip (`VALID`, `EXPIRING SOON`, or `EXPIRED`)
+- Expired sessions redirect to sign-in-required page with a clear message
+- `/app/admin` redirects to auth-required page when role policy fails
+- Audit panel records login, secrets access, admin access, logout, and expiry/denied events
+- Health panel displays per-service response code, latency (ms), and checked timestamp
 
 ### Quick Fixes
 

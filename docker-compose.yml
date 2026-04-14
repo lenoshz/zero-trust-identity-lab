@@ -104,6 +104,27 @@ services:
     restart: unless-stopped
 
   # ─────────────────────────────────────────────────────────────
+  # OpenBao Init — seed secrets, policy, and scoped app token
+  # ─────────────────────────────────────────────────────────────
+  openbao-init:
+    image: openbao/openbao:2.0.0
+    container_name: zt-openbao-init
+    environment:
+      OPENBAO_ADDR: http://openbao:8200
+      OPENBAO_DEV_ROOT_TOKEN_ID: ${OPENBAO_DEV_ROOT_TOKEN_ID}
+      OPENBAO_APP_TOKEN_FILE: /run/secrets/openbao/flask-app-token
+    command: sh /openbao/init/setup.sh
+    volumes:
+      - ./openbao/init/setup.sh:/openbao/init/setup.sh:ro
+      - openbao_app_token:/run/secrets/openbao
+    networks:
+      - identity-net
+    depends_on:
+      openbao:
+        condition: service_healthy
+    restart: "no"
+
+  # ─────────────────────────────────────────────────────────────
   # Flask Demo App — Zero Trust protected application
   # ─────────────────────────────────────────────────────────────
   flask-app:
@@ -112,6 +133,7 @@ services:
       dockerfile: Dockerfile
     container_name: zt-flask-app
     environment:
+      FLASK_ENV: development
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
       FLASK_KEYCLOAK_CLIENT_ID: ${FLASK_KEYCLOAK_CLIENT_ID}
       FLASK_KEYCLOAK_CLIENT_SECRET: ${FLASK_KEYCLOAK_CLIENT_SECRET}
@@ -120,7 +142,10 @@ services:
       FLASK_OIDC_REDIRECT_URI: https://localhost/app/callback
       FLASK_OPENBAO_ADDR: ${FLASK_OPENBAO_ADDR}
       FLASK_OPENBAO_TOKEN: ${FLASK_OPENBAO_TOKEN}
+      FLASK_OPENBAO_TOKEN_FILE: /run/secrets/openbao/flask-app-token
       DOMAIN: ${DOMAIN}
+    volumes:
+      - openbao_app_token:/run/secrets/openbao:ro
     ports:
       - "5000:5000"
     networks:
@@ -130,6 +155,8 @@ services:
         condition: service_started
       openbao:
         condition: service_healthy
+      openbao-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
       interval: 10s
@@ -261,6 +288,7 @@ networks:
 volumes:
   postgres_data:
   openbao_data:
+  openbao_app_token:
   elasticsearch_data:
   keycloak_logs:
   nginx_logs:

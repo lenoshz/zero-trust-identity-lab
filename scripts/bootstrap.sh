@@ -154,8 +154,8 @@ fi
 
 # Seed OpenBao secrets
 if [ -f "${PROJECT_ROOT}/openbao/init/setup.sh" ]; then
-    chmod +x "${PROJECT_ROOT}/openbao/init/setup.sh"
-    sh "${PROJECT_ROOT}/openbao/init/setup.sh" || echo "  ${YELLOW}[!]${NC} OpenBao setup had warnings"
+    docker compose -f "${PROJECT_ROOT}/docker-compose.yml" up --no-deps openbao-init || \
+        echo "  ${YELLOW}[!]${NC} OpenBao setup had warnings"
 fi
 echo ""
 
