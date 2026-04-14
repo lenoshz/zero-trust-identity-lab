@@ -17,7 +17,6 @@ elasticsearch.username: "kibana_system"
 elasticsearch.password: "${KIBANA_PASSWORD}"
 
 # Security
-xpack.security.enabled: true
 xpack.encryptedSavedObjects.encryptionKey: "zerotrust-kibana-encryption-key-32chars!"
 
 # Monitoring

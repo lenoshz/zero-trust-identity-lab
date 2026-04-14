@@ -200,10 +200,10 @@ services:
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - ELASTICSEARCH_USERNAME=kibana_system
+      - KIBANA_PASSWORD=${KIBANA_PASSWORD}
       - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
       - SERVER_BASEPATH=/kibana
       - SERVER_REWRITEBASEPATH=true
-      - XPACK_SECURITY_ENABLED=true
     volumes:
       - ./elk/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
     ports:
