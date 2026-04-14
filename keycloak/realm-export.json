@@ -151,15 +151,14 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "redirectUris": [
-        "https://localhost/app/*",
+        "http://localhost:5000/callback",
+        "https://localhost/app/callback",
         "http://localhost:5000/*",
-        "https://localhost/*",
-        "http://localhost/*"
+        "https://localhost/app/*"
       ],
       "webOrigins": [
-        "https://localhost",
         "http://localhost:5000",
-        "http://localhost"
+        "https://localhost"
       ],
       "baseUrl": "https://localhost/app/",
       "adminUrl": "",

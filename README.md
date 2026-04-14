@@ -296,6 +296,37 @@ See [docs/setup-guide.md](docs/setup-guide.md) for detailed troubleshooting, inc
 - Elasticsearch heap issues
 - OpenBao connection errors
 
+### Keycloak Client Settings (flask-demo-app)
+
+If OIDC login loops, callback fails, or shows invalid redirect errors, verify the `flask-demo-app` client in Keycloak:
+
+- Client type / access type: **Confidential**
+- Client authentication: **Enabled**
+- Valid redirect URIs:
+  - `https://localhost/app/callback`
+  - `https://localhost/app/*`
+  - `http://localhost:5000/callback` (optional direct fallback)
+- Web origins:
+  - `https://localhost`
+  - `http://localhost:5000` (optional)
+
+These values must match the Flask app OIDC environment values from `docker-compose.yml`.
+
+### OIDC Diagnostics Commands
+
+```bash
+docker compose logs --tail=200 flask-app
+docker compose logs --tail=200 nginx
+curl -kI https://localhost/auth/realms/zero-trust-realm/.well-known/openid-configuration
+curl -kI https://localhost/app/
+```
+
+Expected quick checks:
+- Discovery endpoint returns `HTTP/1.1 200 OK`
+- App endpoint returns `HTTP/1.1 200 OK`
+- Flask logs show resolved OIDC settings and login redirect URI
+- Nginx logs show `/auth/` and `/app/` requests without upstream resolution crashes
+
 ### Quick Fixes
 
 ```bash

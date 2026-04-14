@@ -46,17 +46,17 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg nav-zt fixed-top">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center" href="/">
+            <a class="navbar-brand d-flex align-items-center" href="/app/">
                 <i class="bi bi-shield-lock-fill text-primary me-2"></i>
                 <span class="fw-bold">Zero Trust Lab</span>
             </a>
             <div class="navbar-nav ms-auto d-flex flex-row gap-3">
                 {% if user %}
-                <a class="nav-link" href="/dashboard"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
-                <a class="nav-link" href="/secrets"><i class="bi bi-key-fill me-1"></i>Secrets</a>
-                <a class="nav-link text-danger" href="/logout"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+                <a class="nav-link" href="/app/dashboard"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+                <a class="nav-link" href="/app/secrets"><i class="bi bi-key-fill me-1"></i>Secrets</a>
+                <a class="nav-link text-danger" href="/app/logout"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
                 {% else %}
-                <a class="nav-link" href="/login"><i class="bi bi-box-arrow-in-right me-1"></i>Sign In</a>
+                <a class="nav-link" href="/app/login"><i class="bi bi-box-arrow-in-right me-1"></i>Sign In</a>
                 {% endif %}
             </div>
         </div>
@@ -79,11 +79,11 @@
                 <i class="bi bi-lock-fill me-1"></i>Never Trust, Always Verify
             </p>
             {% if not user %}
-            <a href="/login" class="btn btn-zt btn-lg text-white">
+            <a href="/app/login" class="btn btn-zt btn-lg text-white">
                 <i class="bi bi-box-arrow-in-right me-2"></i>Authenticate with Keycloak
             </a>
             {% else %}
-            <a href="/dashboard" class="btn btn-zt btn-lg text-white">
+            <a href="/app/dashboard" class="btn btn-zt btn-lg text-white">
                 <i class="bi bi-speedometer2 me-2"></i>Go to Dashboard
             </a>
             {% endif %}

@@ -31,20 +31,31 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.4
     container_name: zt-keycloak
-    command: start-dev --import-realm
+    command: start-dev --import-realm --health-enabled=true
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       KC_DB_USERNAME: ${POSTGRES_USER}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # Keycloak 24+ style
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+
+      # Backward-compatible fallback
+      KEYCLOAK_ADMIN: ${KC_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
-      KC_LOG: console,file
-      KC_LOG_FILE: /var/log/keycloak/keycloak.log
-      KC_LOG_FILE_FORMAT: "%d{yyyy-MM-dd HH:mm:ss} %-5p [%c] %s%e%n"
+      KC_HEALTH_ENABLED: "true"
+      KC_LOG: console
+
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME_URL: https://localhost/auth
+      KC_HOSTNAME_ADMIN_URL: https://localhost/auth
+
       KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING_SUCCESS_LEVEL: info
       KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING_ERROR_LEVEL: warn
     volumes:
@@ -58,11 +69,11 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200'"]
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/localhost/8080 && printf 'GET /auth/realms/master HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200'\""]
       interval: 15s
       timeout: 10s
-      retries: 15
-      start_period: 60s
+      retries: 30
+      start_period: 180s
     restart: unless-stopped
 
   # ─────────────────────────────────────────────────────────────
@@ -104,7 +115,9 @@ services:
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
       FLASK_KEYCLOAK_CLIENT_ID: ${FLASK_KEYCLOAK_CLIENT_ID}
       FLASK_KEYCLOAK_CLIENT_SECRET: ${FLASK_KEYCLOAK_CLIENT_SECRET}
-      FLASK_KEYCLOAK_REALM: ${FLASK_KEYCLOAK_REALM}
+      FLASK_KEYCLOAK_REALM: zero-trust-realm
+      FLASK_KEYCLOAK_BASE_URL: http://keycloak:8080/auth
+      FLASK_OIDC_REDIRECT_URI: https://localhost/app/callback
       FLASK_OPENBAO_ADDR: ${FLASK_OPENBAO_ADDR}
       FLASK_OPENBAO_TOKEN: ${FLASK_OPENBAO_TOKEN}
       DOMAIN: ${DOMAIN}
@@ -114,7 +127,7 @@ services:
       - identity-net
     depends_on:
       keycloak:
-        condition: service_healthy
+        condition: service_started
       openbao:
         condition: service_healthy
     healthcheck:
@@ -143,7 +156,7 @@ services:
       - monitoring-net
     depends_on:
       keycloak:
-        condition: service_healthy
+        condition: service_started
       flask-app:
         condition: service_healthy
     restart: unless-stopped

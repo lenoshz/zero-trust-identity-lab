@@ -6,13 +6,12 @@ runtime secret fetching from OpenBao.
 """
 
 import os
-import json
 import logging
 from datetime import datetime, timezone
 
 from flask import (
-    Flask, redirect, url_for, session, render_template,
-    jsonify, request
+    Flask, redirect, session, render_template,
+    jsonify
 )
 from authlib.integrations.flask_client import OAuth
 import requests as http_requests
@@ -32,15 +31,23 @@ logging.basicConfig(
 logger = logging.getLogger("zero-trust-app")
 
 # Keycloak / OIDC settings
-KC_REALM = os.environ.get("FLASK_KEYCLOAK_REALM", "zero-trust-realm")
+REALM = os.environ.get("FLASK_KEYCLOAK_REALM", "zero-trust-realm")
 KC_CLIENT_ID = os.environ.get("FLASK_KEYCLOAK_CLIENT_ID", "flask-demo-app")
 KC_CLIENT_SECRET = os.environ.get("FLASK_KEYCLOAK_CLIENT_SECRET", "flask-demo-secret-2024")
 DOMAIN = os.environ.get("DOMAIN", "localhost")
+KEYCLOAK_BASE_URL = (os.environ.get("FLASK_KEYCLOAK_BASE_URL") or "http://keycloak:8080/auth").rstrip("/")
+REDIRECT_URI = os.environ.get("FLASK_OIDC_REDIRECT_URI") or "https://localhost/app/callback"
 
 # Internal Keycloak URL (container-to-container)
-KC_INTERNAL_URL = f"http://keycloak:8080/realms/{KC_REALM}"
+KC_INTERNAL_URL = f"{KEYCLOAK_BASE_URL}/realms/{REALM}"
+OIDC_DISCOVERY_URL = f"{KC_INTERNAL_URL}/.well-known/openid-configuration"
 # External Keycloak URL (browser-facing, via Nginx)
-KC_EXTERNAL_URL = f"https://{DOMAIN}/auth/realms/{KC_REALM}"
+KC_EXTERNAL_URL = f"https://{DOMAIN}/auth/realms/{REALM}"
+
+logger.info("Resolved OIDC KEYCLOAK_BASE_URL=%s", KEYCLOAK_BASE_URL)
+logger.info("Resolved OIDC REALM=%s", REALM)
+logger.info("Resolved OIDC discovery URL=%s", OIDC_DISCOVERY_URL)
+logger.info("Resolved OIDC REDIRECT_URI=%s", REDIRECT_URI)
 
 # OpenBao settings
 OPENBAO_ADDR = os.environ.get("FLASK_OPENBAO_ADDR", "http://openbao:8200")
@@ -55,7 +62,7 @@ oauth.register(
     name="keycloak",
     client_id=KC_CLIENT_ID,
     client_secret=KC_CLIENT_SECRET,
-    server_metadata_url=f"{KC_INTERNAL_URL}/.well-known/openid-configuration",
+    server_metadata_url=OIDC_DISCOVERY_URL,
     client_kwargs={
         "scope": "openid email profile",
     },
@@ -118,46 +125,21 @@ def mask_value(value):
 
 
 def get_user_info():
-    """Extract user info from the session token."""
-    token = session.get("token")
-    if not token:
+    """Extract minimal user identity from the session."""
+    if not session.get("authenticated"):
         return None
 
-    userinfo = session.get("userinfo", {})
-    id_token = token.get("id_token")
-    access_token = token.get("access_token")
-
-    # Decode token claims without verification (already verified by Authlib)
-    from jose import jwt as jose_jwt
-    try:
-        claims = jose_jwt.get_unverified_claims(access_token)
-    except Exception:
-        claims = {}
-
-    # Extract roles
-    realm_roles = claims.get("realm_access", {}).get("roles", [])
-    # Filter out internal Keycloak roles
-    filtered_roles = [
-        r for r in realm_roles
-        if r.startswith("zero-trust-")
-    ]
-
-    # Token expiry
-    exp = claims.get("exp")
-    if exp:
-        expiry_time = datetime.fromtimestamp(exp, tz=timezone.utc)
-        expiry_str = expiry_time.strftime("%Y-%m-%d %H:%M:%S UTC")
-    else:
-        expiry_str = "Unknown"
+    user = session.get("user", {})
 
     return {
-        "username": userinfo.get("preferred_username", claims.get("preferred_username", "unknown")),
-        "email": userinfo.get("email", claims.get("email", "N/A")),
-        "name": userinfo.get("name", claims.get("name", "N/A")),
-        "roles": filtered_roles,
-        "all_roles": realm_roles,
-        "token_expiry": expiry_str,
-        "token_issued": claims.get("iat", "N/A"),
+        "sub": user.get("sub", "unknown"),
+        "username": user.get("preferred_username", "unknown"),
+        "email": user.get("email", "N/A"),
+        "authenticated": bool(session.get("authenticated")),
+        "roles": [],
+        "all_roles": [],
+        "token_expiry": "N/A",
+        "token_issued": "N/A",
     }
 
 
@@ -170,7 +152,7 @@ def index():
     """Public landing page — system status overview."""
     kc_healthy = check_keycloak_health()
     bao_healthy = check_openbao_health()
-    user = get_user_info() if session.get("token") else None
+    user = get_user_info() if session.get("authenticated") else None
 
     return render_template(
         "index.html",
@@ -183,16 +165,8 @@ def index():
 @app.route("/login")
 def login():
     """Redirect to Keycloak OIDC login."""
-    # Determine callback URL
-    redirect_uri = url_for("callback", _external=True, _scheme="https")
-    # If behind proxy, fix the URL
-    if DOMAIN != "localhost" or request.headers.get("X-Forwarded-Proto"):
-        redirect_uri = f"https://{DOMAIN}/app/callback"
-    else:
-        redirect_uri = f"https://localhost/app/callback"
-
-    logger.info("Initiating OIDC login, redirect_uri=%s", redirect_uri)
-    return oauth.keycloak.authorize_redirect(redirect_uri)
+    logger.info("Initiating OIDC login, redirect_uri=%s", REDIRECT_URI)
+    return oauth.keycloak.authorize_redirect(REDIRECT_URI)
 
 
 @app.route("/callback")
@@ -200,22 +174,21 @@ def callback():
     """Handle OIDC callback from Keycloak."""
     try:
         token = oauth.keycloak.authorize_access_token()
-        userinfo = token.get("userinfo", {})
+        userinfo = token.get("userinfo", {}) or {}
 
-        session["token"] = {
-            "access_token": token.get("access_token"),
-            "id_token": token.get("id_token"),
-            "refresh_token": token.get("refresh_token"),
-            "token_type": token.get("token_type"),
-            "expires_at": token.get("expires_at"),
+        # Keep session payload small to avoid oversized cookies behind nginx.
+        session["user"] = {
+            "sub": userinfo.get("sub", "unknown"),
+            "preferred_username": userinfo.get("preferred_username", "unknown"),
+            "email": userinfo.get("email", "N/A"),
         }
-        session["userinfo"] = dict(userinfo) if userinfo else {}
+        session["authenticated"] = True
 
         logger.info(
             "User '%s' authenticated successfully",
             userinfo.get("preferred_username", "unknown"),
         )
-        return redirect(url_for("dashboard"))
+        return redirect("/app/dashboard")
     except Exception as e:
         logger.error("OIDC callback error: %s", e)
         return render_template(
@@ -227,7 +200,7 @@ def callback():
 @app.route("/dashboard")
 def dashboard():
     """Protected dashboard — requires valid Keycloak token."""
-    if not session.get("token"):
+    if not session.get("authenticated"):
         return render_template("login_required.html", error=None)
 
     user = get_user_info()
@@ -247,7 +220,7 @@ def dashboard():
 @app.route("/secrets")
 def secrets():
     """Protected page — shows OpenBao-fetched secrets (values masked)."""
-    if not session.get("token"):
+    if not session.get("authenticated"):
         return render_template("login_required.html", error=None)
 
     user = get_user_info()
@@ -281,19 +254,13 @@ def secrets():
 @app.route("/logout")
 def logout():
     """Clear session and redirect to Keycloak logout."""
-    id_token = session.get("token", {}).get("id_token")
     session.clear()
 
-    # Redirect to Keycloak end-session endpoint
-    if id_token:
-        logout_url = (
-            f"{KC_EXTERNAL_URL}/protocol/openid-connect/logout"
-            f"?id_token_hint={id_token}"
-            f"&post_logout_redirect_uri=https://{DOMAIN}/app/"
-        )
-        return redirect(logout_url)
-
-    return redirect(url_for("index"))
+    logout_url = (
+        f"{KC_EXTERNAL_URL}/protocol/openid-connect/logout"
+        f"?post_logout_redirect_uri=https://{DOMAIN}/app/"
+    )
+    return redirect(logout_url)
 
 
 @app.route("/health")
