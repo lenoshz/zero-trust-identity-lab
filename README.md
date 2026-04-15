@@ -5,6 +5,13 @@
 [![Keycloak](https://img.shields.io/badge/Keycloak-24.0.4-orange)](https://www.keycloak.org/)
 [![OpenBao](https://img.shields.io/badge/OpenBao-2.0.0-yellow)](https://openbao.org/)
 
+## 📺 Video Demonstration
+
+**[Watch the Full Demo Walkthrough on YouTube](https://youtu.be/CBMsW2FbgQk)**  
+*Shows the full JML lifecycle, OpenBao secrets injection, and Elastic SIEM event routing in action.*
+
+---
+
 ## Overview
 
 A production-like **Zero Trust Identity & Access Management (IAM)** platform demonstrating enterprise IAM workflows using **Keycloak SSO** (OpenID Connect), **OpenBao** secrets management, **Nginx** reverse proxy with TLS, and **ELK Stack** SIEM integration. Features a complete **Joiner/Mover/Leaver (JML) lifecycle engine**, **access review certification workflow**, **MFA enforcement**, **SIEM evidence panels**, and **impact metrics dashboard**.
@@ -371,26 +378,36 @@ Each KPI shows a trend arrow (↑/↓/→) comparing the current value to the pr
 
 ---
 
-## Screenshots Checklist
+## System Gallery
 
-> 📸 After deploying the lab, take screenshots of the following and add them to `docs/screenshots/`:
-> 
-> 1. Flask app landing page showing system status
-> 2. Keycloak OIDC login page
-> 3. Identity dashboard with KPI metrics row + trend arrows
-> 4. Security Events (SIEM) panel with filter chips
-> 5. Secrets page with masked OpenBao values
-> 6. Admin panel with IAM workflow quick-link cards
-> 7. JML Joiner page — create user form + recent joiners
-> 8. JML Mover page — transfer preview (FROM → TO)
-> 9. JML Leaver page — revocation checklist + disabled users
-> 10. Access Reviews page — risk level badges + approve/revoke
-> 11. Access Review revocation modal (reason required)
-> 12. CSV export of review decisions
-> 13. MFA warning banner (demo mode)
-> 14. MFA Required page (strict mode)
-> 15. Audit log panel with JML + review events
-> 16. Kibana dashboard showing identity events
+### 1. Zero Trust Architecture Landing Page
+![Landing Page](docs/screenshots/01-landing-page.png)
+
+### 2. Keycloak OIDC Authentication
+![Keycloak Login](docs/screenshots/02-keycloak-login.png)
+
+### 3. Identity Dashboard & KPI Metrics
+![Dashboard](docs/screenshots/03-dashboard.png)
+
+### 4. Dynamic Secrets via OpenBao
+![Secrets Page](docs/screenshots/04-secrets-page.png)
+
+### 5. IAM Administration Hub
+![Admin Panel](docs/screenshots/05-admin-panel.png)
+
+### 6. Joiner Workflow (Onboarding & Auto-Provisioning)
+![Joiner Form](docs/screenshots/06-joiner-form.png)
+![Joiner Success](docs/screenshots/07-joiner-success.png)
+
+### 7. Mover Workflow (Role Recomputation)
+![Mover Preview](docs/screenshots/08-mover-preview.png)
+
+### 8. Leaver Workflow (Total Session & Access Revocation)
+![Leaver Revocation](docs/screenshots/09-leaver-revoke.png)
+
+### 9. Access Review Governance
+![Reviews Table](docs/screenshots/10-reviews-table.png)
+![Review Revoke Modal](docs/screenshots/11-reviews-revoke-modal.png)
 
 ---
 
@@ -544,21 +561,6 @@ docker compose down -v && docker compose up -d
 docker compose ps
 ```
 
----
-
-## CV-Ready Description
-
-> **Project:** Zero Trust Identity & IAM Workflow Lab  
-> Designed and deployed a Zero Trust identity platform using Keycloak 24 (IAM/SSO/OIDC), OpenBao (secrets management), and Nginx (TLS reverse proxy) orchestrated via Docker Compose. Built a complete Joiner/Mover/Leaver identity lifecycle engine with automatic role assignment by department, access review certification workflow with CSV export, and MFA enforcement for privileged actions. Implemented RBAC with three granular roles, short-lived JWT tokens, and runtime secrets from OpenBao — zero credentials in code. Created an in-app SIEM evidence dashboard logging all identity events (login, RBAC denials, JML actions, review decisions, MFA bypass) with Kibana deep-links. Built KPI metrics tracking onboarding time, offboarding completion, privileged account count, MFA coverage, and review completion with automated trend analysis. All audit events forwarded to Elasticsearch via Filebeat for real-time threat monitoring. Stack mirrors enterprise IAM deployments (Azure AD, Okta, SailPoint) used in Identity Security Engineering roles.
-
----
-
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-<p align="center">
-  <strong>🔐 Never Trust. Always Verify. 🔐</strong>
-</p>
