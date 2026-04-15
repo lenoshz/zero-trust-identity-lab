@@ -132,9 +132,15 @@ services:
       context: ./flask-app
       dockerfile: Dockerfile
     container_name: zt-flask-app
+    user: "0:0"
+    command: >
+      sh -c "mkdir -p /app/data &&
+             chown -R appuser:appuser /app/data &&
+             su appuser -s /bin/sh -c 'python app.py'"
     environment:
       FLASK_ENV: development
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
+      IAM_DB_PATH: /app/data/iam.db
       FLASK_KEYCLOAK_CLIENT_ID: ${FLASK_KEYCLOAK_CLIENT_ID}
       FLASK_KEYCLOAK_CLIENT_SECRET: ${FLASK_KEYCLOAK_CLIENT_SECRET}
       FLASK_KEYCLOAK_REALM: zero-trust-realm
@@ -143,9 +149,11 @@ services:
       FLASK_OPENBAO_ADDR: ${FLASK_OPENBAO_ADDR}
       FLASK_OPENBAO_TOKEN: ${FLASK_OPENBAO_TOKEN}
       FLASK_OPENBAO_TOKEN_FILE: /run/secrets/openbao/flask-app-token
+      FLASK_ADMIN_MFA_STRICT: ${FLASK_ADMIN_MFA_STRICT:-false}
       DOMAIN: ${DOMAIN}
     volumes:
       - openbao_app_token:/run/secrets/openbao:ro
+      - flask_iam_data:/app/data
     ports:
       - "5000:5000"
     networks:
@@ -160,7 +168,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
       interval: 10s
-      timeout: 5s
+      timeout: 20s
       retries: 5
       start_period: 15s
     restart: unless-stopped
@@ -249,6 +257,23 @@ services:
     restart: unless-stopped
 
   # ─────────────────────────────────────────────────────────────
+  # Kibana Init — Set kibana_system password in Elasticsearch
+  # Runs once after ES is healthy, then exits.
+  # ─────────────────────────────────────────────────────────────
+  kibana-init:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: zt-kibana-init
+    entrypoint: ["sh", "-c", "until curl -sf -u elastic:$$ELASTIC_PASSWORD http://elasticsearch:9200/_cluster/health > /dev/null 2>&1; do sleep 5; done && printf '{\"password\":\"%s\"}' \"$$KIBANA_PASSWORD\" | curl -sf -X POST -u elastic:$$ELASTIC_PASSWORD -H 'Content-Type: application/json' http://elasticsearch:9200/_security/user/kibana_system/_password -d @- && echo ' kibana_system password set.' && echo 'Waiting for Kibana to be ready...' && until curl -sf -u elastic:$$ELASTIC_PASSWORD http://kibana:5601/kibana/api/status > /dev/null 2>&1; do sleep 10; done && echo 'Kibana is ready. Creating data view...' && printf '{\"data_view\":{\"title\":\"zerotrust-logs-*\",\"name\":\"Zero Trust Logs\",\"timeFieldName\":\"@timestamp\"}}' | curl -s -X POST -u elastic:$$ELASTIC_PASSWORD -H 'kbn-xsrf: true' -H 'Content-Type: application/json' http://kibana:5601/kibana/api/data_views/data_view -d @- > /dev/null 2>&1; echo ' Data view configured.'"]
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - KIBANA_PASSWORD=${KIBANA_PASSWORD}
+    networks:
+      - monitoring-net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ─────────────────────────────────────────────────────────────
   # Filebeat — Log shipper (Keycloak + Nginx → Elasticsearch)
   # ─────────────────────────────────────────────────────────────
   filebeat:
@@ -292,3 +317,4 @@ volumes:
   elasticsearch_data:
   keycloak_logs:
   nginx_logs:
+  flask_iam_data:

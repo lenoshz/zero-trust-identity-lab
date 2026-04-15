@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Zero Trust Lab — Leaver: Disable user and revoke all roles and sessions">
+    <title>Leaver — IAM Lifecycle — Zero Trust Lab</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root { --zt-dark: #0a0e17; }
+        body { background: var(--zt-dark); min-height: 100vh; }
+        .nav-zt { background: rgba(10,14,23,0.95); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .card-zt { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }
+        .card-zt:hover { border-color: rgba(13,110,253,0.2); }
+        .nav-pills .nav-link { color: #8b949e; border-radius: 8px; }
+        .nav-pills .nav-link.active { background: rgba(13,110,253,0.15); color: #0d6efd; }
+        .info-label { color: #6c757d; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .role-badge { font-size: 0.75rem; padding: 4px 10px; }
+        .form-control:focus, .form-select:focus { border-color: #0d6efd; box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.15); }
+        .form-control, .form-select { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; }
+        .table-zt th { color: #8b949e; font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .mfa-banner { background: rgba(255,193,7,0.1); border: 1px solid rgba(255,193,7,0.3); border-radius: 8px; }
+        .revoke-checklist li { padding: 4px 0; }
+        .revoke-checklist .bi { margin-right: 8px; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(139, 148, 158, 0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(13, 110, 253, 0.6); }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg nav-zt fixed-top">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand d-flex align-items-center" href="/app/">
+                <i class="bi bi-shield-lock-fill text-primary me-2"></i>
+                <span class="fw-bold">Zero Trust Lab</span>
+            </a>
+            <div class="navbar-nav ms-auto d-flex flex-row align-items-center gap-3">
+                <span class="text-secondary small">
+                    <i class="bi bi-person-circle me-1"></i>{{ user.username }}
+                </span>
+                <a class="nav-link text-danger small" href="/app/logout">
+                    <i class="bi bi-box-arrow-right me-1"></i>Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid" style="padding-top: 80px;">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-lg-2 py-3 position-relative">
+                <nav class="nav nav-pills flex-column gap-1 position-sticky" style="top: 90px; max-height: calc(100vh - 100px); overflow-y: auto;">
+                    <a class="nav-link" href="/app/dashboard">
+                        <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                    </a>
+                    <a class="nav-link" href="/app/secrets">
+                        <i class="bi bi-key-fill me-2"></i>Secrets
+                    </a>
+                    {% if user.is_admin %}
+                    <a class="nav-link" href="/app/admin">
+                        <i class="bi bi-person-gear me-2"></i>Admin
+                    </a>
+                    <hr class="border-secondary border-opacity-25 my-1">
+                    <small class="text-secondary px-3 mb-1" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:1px;">IAM Lifecycle</small>
+                    <a class="nav-link" href="/app/admin/iam/joiner">
+                        <i class="bi bi-person-plus me-2"></i>Joiner
+                    </a>
+                    <a class="nav-link" href="/app/admin/iam/mover">
+                        <i class="bi bi-arrow-left-right me-2"></i>Mover
+                    </a>
+                    <a class="nav-link active" href="/app/admin/iam/leaver">
+                        <i class="bi bi-person-x me-2"></i>Leaver
+                    </a>
+                    <a class="nav-link" href="/app/admin/reviews">
+                        <i class="bi bi-clipboard-check me-2"></i>Reviews
+                    </a>
+                    {% endif %}
+                    <hr class="border-secondary border-opacity-25">
+                    <a class="nav-link" href="/app/">
+                        <i class="bi bi-house me-2"></i>Home
+                    </a>
+                    <a class="nav-link text-danger" href="/app/logout">
+                        <i class="bi bi-box-arrow-right me-2"></i>Logout
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-lg-10 py-3">
+
+                <h3 class="fw-bold mb-1">
+                    <i class="bi bi-person-x text-danger me-2"></i>Leaver — Offboard User
+                    {% if mfa_bypass %}<span class="badge bg-warning bg-opacity-10 border border-warning border-opacity-50 text-warning ms-3 align-middle" style="font-size: 0.5em; font-weight: 500;"><i class="bi bi-unlock-fill me-1"></i>DEV BYPASS: MFA DISABLED</span>{% endif %}
+                </h3>
+                <p class="text-secondary small mb-4">Disable a user account and revoke all application roles and sessions.</p>
+
+                {% if error %}
+                <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+                </div>
+                {% endif %}
+                {% if success %}
+                <div class="alert alert-success d-flex align-items-center mb-4" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+                </div>
+                {% endif %}
+
+                <div class="row g-4">
+                    <div class="col-lg-5">
+                        <div class="card-zt p-4">
+                            <h5 class="mb-3"><i class="bi bi-person-x-fill text-danger me-2"></i>Disable User</h5>
+                            <form method="POST" action="/app/admin/iam/leaver" id="leaver-form">
+                                <div class="mb-3">
+                                    <label for="user_id" class="form-label small text-secondary">Select Active User</label>
+                                    <select class="form-select" id="user_id" name="user_id" required>
+                                        <option value="" disabled selected>Choose a user to offboard…</option>
+                                        {% for u in active_users %}
+                                        <option value="{{ u.id }}" data-dept="{{ u.department }}" data-role="{{ u.role }}" data-email="{{ u.email }}">
+                                            {{ u.username }} — {{ u.department }} ({{ u.role }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <!-- User Detail Preview -->
+                                <div id="user-detail" style="display:none;" class="mb-3">
+                                    <div class="info-label">User Details</div>
+                                    <div class="card-zt p-3 mt-1" style="border-color: rgba(220,53,69,0.3);">
+                                        <table class="table table-sm table-borderless mb-0">
+                                            <tr><td class="text-secondary small">Department</td><td id="detail-dept">—</td></tr>
+                                            <tr><td class="text-secondary small">Current Role</td><td><span class="badge bg-danger bg-opacity-25 text-danger" id="detail-role">—</span></td></tr>
+                                            <tr><td class="text-secondary small">Email</td><td id="detail-email" class="small">—</td></tr>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Revocation Checklist -->
+                                <div id="revocation-checklist" style="display:none;" class="mb-3">
+                                    <div class="info-label">Revocation Actions</div>
+                                    <ul class="list-unstyled revoke-checklist mt-1 small">
+                                        <li><i class="bi bi-x-circle-fill text-danger"></i>Revoke all application roles</li>
+                                        <li><i class="bi bi-x-circle-fill text-danger"></i>Invalidate active sessions</li>
+                                        <li><i class="bi bi-x-circle-fill text-danger"></i>Mark account as disabled</li>
+                                        <li><i class="bi bi-x-circle-fill text-danger"></i>Log offboarding event</li>
+                                    </ul>
+                                </div>
+
+                                <button type="submit" class="btn btn-danger w-100" id="submit-btn" disabled onclick="return confirm('Are you sure you want to disable this user? This will revoke all their roles and sessions.')">
+                                    <i class="bi bi-person-x-fill me-2"></i>Disable User & Revoke Access
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-7">
+                        <!-- Disabled Users -->
+                        <div class="card-zt p-4 mb-4">
+                            <h5 class="mb-3"><i class="bi bi-person-slash text-secondary me-2"></i>Disabled Users</h5>
+                            {% if disabled_users %}
+                            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <thead>
+                                        <tr class="table-zt">
+                                            <th>Username</th>
+                                            <th>Department</th>
+                                            <th>Status</th>
+                                            <th>Disabled At</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for u in disabled_users %}
+                                        <tr class="text-secondary">
+                                            <td><s>{{ u.username }}</s></td>
+                                            <td>{{ u.department }}</td>
+                                            <td><span class="badge bg-danger bg-opacity-25 text-danger">disabled</span></td>
+                                            <td class="small">{{ u.updated_at }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <p class="text-secondary small mb-0">No disabled users.</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Leaver Events -->
+                        <div class="card-zt p-4">
+                            <h5 class="mb-3"><i class="bi bi-clock-history text-primary me-2"></i>Offboarding History</h5>
+                            {% if recent_events %}
+                            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <thead>
+                                        <tr class="table-zt">
+                                            <th>User</th>
+                                            <th>Dept</th>
+                                            <th>Revoked Role</th>
+                                            <th>By</th>
+                                            <th>When</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for ev in recent_events %}
+                                        <tr>
+                                            <td class="fw-bold text-danger">{{ ev.username }}</td>
+                                            <td class="text-secondary">{{ ev.old_department }}</td>
+                                            <td><span class="badge bg-danger bg-opacity-25 text-danger role-badge"><s>{{ ev.old_role }}</s></span></td>
+                                            <td class="text-secondary small">{{ ev.performed_by }}</td>
+                                            <td class="text-secondary small">{{ ev.timestamp }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <p class="text-secondary small mb-0">No leaver events yet.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const userSelect = document.getElementById('user_id');
+        const userDetail = document.getElementById('user-detail');
+        const revokeChecklist = document.getElementById('revocation-checklist');
+        const submitBtn = document.getElementById('submit-btn');
+
+        userSelect.addEventListener('change', function() {
+            const opt = this.options[this.selectedIndex];
+            if (!opt || !opt.value) return;
+
+            document.getElementById('detail-dept').textContent = opt.dataset.dept;
+            document.getElementById('detail-role').textContent = opt.dataset.role;
+            document.getElementById('detail-email').textContent = opt.dataset.email;
+            userDetail.style.display = 'block';
+            revokeChecklist.style.display = 'block';
+            submitBtn.disabled = false;
+        });
+    </script>
+</body>
+</html>

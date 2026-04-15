@@ -26,6 +26,28 @@
         .health-grid td { font-size: 0.85rem; }
         .audit-row { border-bottom: 1px solid rgba(255,255,255,0.06); }
         .audit-row:last-child { border-bottom: none; }
+        /* KPI Cards */
+        .kpi-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1rem; text-align: center; transition: all 0.3s ease; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .kpi-card:hover { border-color: rgba(13,110,253,0.25); transform: translateY(-2px); }
+        .kpi-value { font-size: 1.8rem; font-weight: 700; line-height: 1.2; }
+        .kpi-label { font-size: 0.72rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+        .kpi-trend { font-size: 0.75rem; margin-top: auto; padding-top: 8px; }
+        .kpi-icon { font-size: 1.3rem; margin-bottom: 6px; opacity: 0.7; }
+        /* SIEM Panel */
+        .filter-chip { font-size: 0.72rem; padding: 3px 10px; border-radius: 20px; cursor: pointer; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #8b949e; transition: all 0.2s ease; margin: 2px; }
+        .filter-chip:hover { border-color: rgba(13,110,253,0.4); color: #e2e8f0; }
+        .filter-chip.active { background: rgba(13,110,253,0.15); border-color: rgba(13,110,253,0.4); color: #0d6efd; }
+        .severity-info { color: #60a5fa; }
+        .severity-warning { color: #fbbf24; }
+        .severity-error { color: #f87171; }
+        .severity-critical { color: #ef4444; font-weight: 600; }
+        .siem-row { border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.82rem; }
+        .siem-row:last-child { border-bottom: none; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(139, 148, 158, 0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(13, 110, 253, 0.6); }
     </style>
 </head>
 <body>
@@ -50,8 +72,8 @@
     <div class="container-fluid" style="padding-top: 80px;">
         <div class="row">
             <!-- Sidebar -->
-            <div class="col-lg-2 py-3">
-                <nav class="nav nav-pills flex-column gap-1">
+            <div class="col-lg-2 py-3 position-relative">
+                <nav class="nav nav-pills flex-column gap-1 position-sticky" style="top: 90px; max-height: calc(100vh - 100px); overflow-y: auto;">
                     <a class="nav-link {{ 'active' if active_page == 'dashboard' }}" href="/app/dashboard">
                         <i class="bi bi-speedometer2 me-2"></i>Dashboard
                     </a>
@@ -61,6 +83,20 @@
                     {% if user.is_admin %}
                     <a class="nav-link {{ 'active' if active_page == 'admin' }}" href="/app/admin">
                         <i class="bi bi-person-gear me-2"></i>Admin
+                    </a>
+                    <hr class="border-secondary border-opacity-25 my-1">
+                    <small class="text-secondary px-3 mb-1" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:1px;">IAM Lifecycle</small>
+                    <a class="nav-link" href="/app/admin/iam/joiner">
+                        <i class="bi bi-person-plus me-2"></i>Joiner
+                    </a>
+                    <a class="nav-link" href="/app/admin/iam/mover">
+                        <i class="bi bi-arrow-left-right me-2"></i>Mover
+                    </a>
+                    <a class="nav-link" href="/app/admin/iam/leaver">
+                        <i class="bi bi-person-x me-2"></i>Leaver
+                    </a>
+                    <a class="nav-link" href="/app/admin/reviews">
+                        <i class="bi bi-clipboard-check me-2"></i>Reviews
                     </a>
                     {% endif %}
                     <hr class="border-secondary border-opacity-25">
@@ -82,22 +118,54 @@
                     <i class="bi bi-speedometer2 text-primary me-2"></i>Identity Dashboard
                 </h3>
 
+                {% if kibana_error %}
+                <div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Kibana is currently unavailable. Please start or recover Kibana, then try again.
+                </div>
+                {% endif %}
+
+                <!-- ═══ KPI Metrics Row ═══ -->
+                {% if metrics %}
+                <div class="row g-3 mb-4">
+                    {% for m in metrics %}
+                    <div class="col">
+                        <div class="kpi-card">
+                            <div class="kpi-icon text-primary"><i class="bi {{ m.icon }}"></i></div>
+                            <div class="kpi-value">{{ m.display_value }}</div>
+                            <div class="kpi-label">{{ m.label }}</div>
+                            <div class="kpi-trend text-{{ m.trend_color }}">
+                                {% if m.trend == 'up' %}
+                                    <i class="bi bi-arrow-up-short"></i>
+                                {% elif m.trend == 'down' %}
+                                    <i class="bi bi-arrow-down-short"></i>
+                                {% else %}
+                                    <i class="bi bi-dash"></i>
+                                {% endif %}
+                                {{ m.delta }}{% if 'pct' in m.key %}%{% elif 'time' in m.key %} min{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
                 <!-- User Info Cards -->
                 <div class="row g-3 mb-4">
                     <div class="col-md-3">
-                        <div class="card-zt p-3">
+                        <div class="card-zt p-3 h-100">
                             <div class="info-label">Username</div>
                             <div class="fw-bold">{{ user.username }}</div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card-zt p-3">
+                        <div class="card-zt p-3 h-100">
                             <div class="info-label">Email</div>
                             <div class="fw-bold">{{ user.email }}</div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card-zt p-3">
+                        <div class="card-zt p-3 h-100">
                             <div class="info-label">Issued At</div>
                             <div class="fw-bold text-info" style="font-size: 0.85rem;">
                                 <i class="bi bi-clock-history me-1"></i>{{ user.token_issued }}
@@ -105,7 +173,7 @@
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card-zt p-3">
+                        <div class="card-zt p-3 h-100">
                             <div class="info-label">Expires At</div>
                             <div class="fw-bold text-warning" style="font-size: 0.85rem;">
                                 <i class="bi bi-hourglass-split me-1"></i>{{ user.token_expiry }}
@@ -116,7 +184,7 @@
 
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
-                        <div class="card-zt p-3">
+                        <div class="card-zt p-3 h-100">
                             <div class="info-label">Remaining</div>
                             <div class="fw-bold" id="token-remaining" data-seconds="{{ user.remaining_seconds if user.remaining_seconds is not none else '' }}">
                                 {{ user.remaining_time }}
@@ -124,7 +192,7 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card-zt p-3">
+                        <div class="card-zt p-3 h-100">
                             <div class="info-label">Token Status</div>
                             <div>
                                 {% if user.token_status == 'valid' %}
@@ -140,7 +208,7 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card-zt p-3">
+                        <div class="card-zt p-3 h-100">
                             <div class="info-label">OpenBao Status</div>
                             <div>
                                 <span class="status-dot {{ 'green' if openbao_status else 'red' }} me-2"></span>
@@ -155,7 +223,7 @@
                 <!-- Roles & Auth Details -->
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <div class="card-zt p-4">
+                        <div class="card-zt p-4 h-100">
                             <h5 class="mb-3"><i class="bi bi-person-badge me-2 text-primary"></i>Assigned Roles</h5>
                             {% if user.roles %}
                                 {% for role in user.roles %}
@@ -176,7 +244,7 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="card-zt p-4">
+                        <div class="card-zt p-4 h-100">
                             <h5 class="mb-3"><i class="bi bi-shield-lock me-2 text-primary"></i>Authentication Details</h5>
                             <table class="table table-sm table-borderless mb-0">
                                 <tr>
@@ -293,11 +361,51 @@
                     </div>
                 </div>
 
-                <div class="card-zt p-4">
+                <div class="card-zt p-4 mb-4">
                     <h6 class="mb-3">Current Roles</h6>
                     {% for role in user.all_roles %}
                     <span class="badge bg-secondary bg-opacity-25 text-secondary role-badge me-1 mb-1">{{ role }}</span>
                     {% endfor %}
+                </div>
+
+                <!-- Admin Quick Links -->
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <a href="/app/admin/iam/joiner" class="text-decoration-none">
+                            <div class="card-zt p-4 text-center h-100">
+                                <i class="bi bi-person-plus-fill text-success" style="font-size: 2rem;"></i>
+                                <div class="fw-bold mt-2">Joiner</div>
+                                <div class="text-secondary small">Onboard users</div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="/app/admin/iam/mover" class="text-decoration-none">
+                            <div class="card-zt p-4 text-center h-100">
+                                <i class="bi bi-arrow-left-right text-primary" style="font-size: 2rem;"></i>
+                                <div class="fw-bold mt-2">Mover</div>
+                                <div class="text-secondary small">Transfer departments</div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="/app/admin/iam/leaver" class="text-decoration-none">
+                            <div class="card-zt p-4 text-center h-100">
+                                <i class="bi bi-person-x-fill text-danger" style="font-size: 2rem;"></i>
+                                <div class="fw-bold mt-2">Leaver</div>
+                                <div class="text-secondary small">Offboard users</div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="/app/admin/reviews" class="text-decoration-none">
+                            <div class="card-zt p-4 text-center h-100">
+                                <i class="bi bi-clipboard-check-fill text-warning" style="font-size: 2rem;"></i>
+                                <div class="fw-bold mt-2">Reviews</div>
+                                <div class="text-secondary small">Access certifications</div>
+                            </div>
+                        </a>
+                    </div>
                 </div>
                 {% endif %}
 
@@ -353,6 +461,77 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- ═══ SECURITY EVENTS (SIEM) PANEL ═══ -->
+                <div class="row g-3 mt-1">
+                    <div class="col-12">
+                        <div class="card-zt p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0"><i class="bi bi-shield-fill-exclamation me-2 text-primary"></i>Security Events</h5>
+                                <a href="/app/kibana/discover" class="btn btn-sm btn-outline-info">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>Open in Kibana
+                                </a>
+                            </div>
+
+                            <!-- Filter Chips -->
+                            <div class="mb-3" id="siem-filters">
+                                <span class="small text-secondary me-2">Type:</span>
+                                <button class="filter-chip active" data-filter-type="all" onclick="filterSiem('type','all')">All</button>
+                                <button class="filter-chip" data-filter-type="login_success" onclick="filterSiem('type','login_success')">Login</button>
+                                <button class="filter-chip" data-filter-type="login_fail" onclick="filterSiem('type','login_fail')">Login Fail</button>
+                                <button class="filter-chip" data-filter-type="logout" onclick="filterSiem('type','logout')">Logout</button>
+                                <button class="filter-chip" data-filter-type="rbac_denied" onclick="filterSiem('type','rbac_denied')">RBAC Denied</button>
+                                <button class="filter-chip" data-filter-type="secret_access" onclick="filterSiem('type','secret_access')">Secret Access</button>
+                                <button class="filter-chip" data-filter-type="admin_action" onclick="filterSiem('type','admin_action')">Admin</button>
+                                <button class="filter-chip" data-filter-type="review_decision" onclick="filterSiem('type','review_decision')">Review</button>
+                                <span class="ms-3 small text-secondary me-2">Severity:</span>
+                                <button class="filter-chip active" data-filter-sev="all" onclick="filterSiem('sev','all')">All</button>
+                                <button class="filter-chip" data-filter-sev="info" onclick="filterSiem('sev','info')">Info</button>
+                                <button class="filter-chip" data-filter-sev="warning" onclick="filterSiem('sev','warning')">Warning</button>
+                                <button class="filter-chip" data-filter-sev="error" onclick="filterSiem('sev','error')">Error</button>
+                                <button class="filter-chip" data-filter-sev="critical" onclick="filterSiem('sev','critical')">Critical</button>
+                            </div>
+
+                            <!-- Events Table -->
+                            {% if security_events %}
+                            <div style="max-height: 320px; overflow-y: auto;">
+                                <table class="table table-sm table-borderless mb-0" id="siem-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:20%; color:#8b949e; font-size:0.75rem; text-transform:uppercase;">Timestamp</th>
+                                            <th style="width:15%; color:#8b949e; font-size:0.75rem; text-transform:uppercase;">Event Type</th>
+                                            <th style="width:10%; color:#8b949e; font-size:0.75rem; text-transform:uppercase;">Severity</th>
+                                            <th style="width:12%; color:#8b949e; font-size:0.75rem; text-transform:uppercase;">Actor</th>
+                                            <th style="color:#8b949e; font-size:0.75rem; text-transform:uppercase;">Detail</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for ev in security_events %}
+                                        <tr class="siem-row" data-type="{{ ev.event_type }}" data-sev="{{ ev.severity }}">
+                                            <td class="text-secondary">{{ ev.timestamp }}</td>
+                                            <td><code>{{ ev.event_type }}</code></td>
+                                            <td>
+                                                <span class="badge role-badge
+                                                    {% if ev.severity == 'critical' %}bg-danger
+                                                    {% elif ev.severity == 'error' %}bg-danger bg-opacity-75
+                                                    {% elif ev.severity == 'warning' %}bg-warning text-dark
+                                                    {% else %}bg-info bg-opacity-50{% endif %}">
+                                                    {{ ev.severity }}
+                                                </span>
+                                            </td>
+                                            <td class="text-secondary">{{ ev.actor }}</td>
+                                            <td class="small">{{ ev.detail }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <p class="text-secondary small mb-0">No security events logged yet. Actions like login, secret access, and admin operations will appear here.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
                 {% endif %}
 
             </div>
@@ -361,6 +540,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        /* Token countdown */
         (function () {
             const node = document.getElementById('token-remaining');
             if (!node) return;
@@ -383,6 +563,30 @@
             render();
             setInterval(render, 1000);
         })();
+
+        /* SIEM filter logic */
+        let activeType = 'all';
+        let activeSev = 'all';
+
+        function filterSiem(kind, value) {
+            if (kind === 'type') {
+                activeType = value;
+                document.querySelectorAll('[data-filter-type]').forEach(el => {
+                    el.classList.toggle('active', el.dataset.filterType === value);
+                });
+            } else {
+                activeSev = value;
+                document.querySelectorAll('[data-filter-sev]').forEach(el => {
+                    el.classList.toggle('active', el.dataset.filterSev === value);
+                });
+            }
+
+            document.querySelectorAll('#siem-table tbody .siem-row').forEach(row => {
+                const typeMatch = activeType === 'all' || row.dataset.type === activeType;
+                const sevMatch = activeSev === 'all' || row.dataset.sev === activeSev;
+                row.style.display = (typeMatch && sevMatch) ? '' : 'none';
+            });
+        }
     </script>
 </body>
 </html>

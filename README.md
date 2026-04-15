@@ -1,4 +1,4 @@
-# 🔐 Zero Trust Identity & Secrets Management Lab
+# 🔐 Zero Trust Identity & IAM Workflow Lab
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-v2-blue)](https://docs.docker.com/compose/)
@@ -7,7 +7,9 @@
 
 ## Overview
 
-A production-like **Zero Trust Identity & Access Management (IAM)** platform demonstrating enterprise security architecture using **Keycloak SSO** (OpenID Connect), **OpenBao** secrets management, **Nginx** reverse proxy with TLS, and **ELK Stack** SIEM integration with real-time identity threat dashboards. Every design decision follows Zero Trust principles: **never trust, always verify**.
+A production-like **Zero Trust Identity & Access Management (IAM)** platform demonstrating enterprise IAM workflows using **Keycloak SSO** (OpenID Connect), **OpenBao** secrets management, **Nginx** reverse proxy with TLS, and **ELK Stack** SIEM integration. Features a complete **Joiner/Mover/Leaver (JML) lifecycle engine**, **access review certification workflow**, **MFA enforcement**, **SIEM evidence panels**, and **impact metrics dashboard**.
+
+Every design decision follows Zero Trust principles: **never trust, always verify**.
 
 This project is a fully containerized, single-command deployment that mirrors the identity security stack used in enterprise environments — built as a portfolio piece demonstrating hands-on IAM engineering skills.
 
@@ -16,41 +18,115 @@ This project is a fully containerized, single-command deployment that mirrors th
 ## Architecture
 
 ```
-                           ┌──────────────────────────────────────────────┐
-                           │           ZERO TRUST BOUNDARY                │
-   ┌──────────┐            │                                              │
-   │          │   HTTPS    │  ┌──────────────────────────────────────┐    │
-   │ Browser  │ ─────────► │  │         Nginx (TLS Gateway)         │    │
-   │ (User)   │  :443      │  │   Security Headers · JSON Logs      │    │
-   │          │ ◄───────── │  └──────┬──────────┬──────────┬────────┘    │
-   └──────────┘            │         │          │          │             │
-                           │         ▼          ▼          ▼             │
-                           │  ┌──────────┐ ┌─────────┐ ┌────────┐      │
-                           │  │ Keycloak │ │  Flask   │ │ Kibana │      │
-                           │  │  (IdP)   │ │  App    │ │ (SIEM) │      │
-                           │  │ OIDC/SSO │ │ :5000   │ │ :5601  │      │
-                           │  │ :8080    │ │         │ │        │      │
-                           │  └────┬─────┘ └───┬─────┘ └───┬────┘      │
-                           │       │           │           │            │
-                           │       ▼           ▼           │            │
-                           │  ┌──────────┐ ┌─────────┐    │            │
-                           │  │PostgreSQL│ │ OpenBao │    │            │
-                           │  │  (DB)    │ │(Secrets)│    │            │
-                           │  │ :5432    │ │ :8200   │    │            │
-                           │  └──────────┘ └─────────┘    │            │
-                           │                               │            │
-                           │  ┌────────────────────────────┴──────┐    │
-                           │  │  Filebeat → Elasticsearch :9200   │    │
-                           │  │  (Log Pipeline)                    │    │
-                           │  └───────────────────────────────────┘    │
-                           └──────────────────────────────────────────────┘
+                           ┌───────────────────────────────────────────────────────┐
+                           │              ZERO TRUST BOUNDARY                      │
+   ┌──────────┐            │                                                       │
+   │          │   HTTPS    │  ┌───────────────────────────────────────────────┐    │
+   │ Browser  │ ─────────► │  │           Nginx (TLS Gateway)                │    │
+   │ (User)   │  :443      │  │     Security Headers · JSON Logs             │    │
+   │          │ ◄───────── │  └──────┬──────────┬──────────┬─────────────────┘    │
+   └──────────┘            │         │          │          │                      │
+                           │         ▼          ▼          ▼                      │
+                           │  ┌──────────┐ ┌──────────────────────┐ ┌────────┐   │
+                           │  │ Keycloak │ │      Flask App       │ │ Kibana │   │
+                           │  │  (IdP)   │ │  ┌────────────────┐  │ │ (SIEM) │   │
+                           │  │ OIDC/SSO │ │  │  IAM Workflow   │  │ │ :5601  │   │
+                           │  │ :8080    │ │  │  Engine (JML)   │  │ │        │   │
+                           │  │          │ │  │  Access Reviews │  │ │        │   │
+                           │  │          │ │  │  MFA Enforcer   │  │ │        │   │
+                           │  │          │ │  │  SIEM Logger    │  │ │        │   │
+                           │  │          │ │  │  KPI Metrics    │  │ │        │   │
+                           │  │          │ │  └────────────────┘  │ │        │   │
+                           │  │          │ │  :5000               │ │        │   │
+                           │  └────┬─────┘ └───┬──────────────────┘ └───┬────┘   │
+                           │       │           │                       │         │
+                           │       ▼           ▼                       │         │
+                           │  ┌──────────┐ ┌─────────┐ ┌──────────┐   │         │
+                           │  │PostgreSQL│ │ OpenBao │ │ SQLite   │   │         │
+                           │  │  (DB)    │ │(Secrets)│ │(IAM Data)│   │         │
+                           │  │ :5432    │ │ :8200   │ │          │   │         │
+                           │  └──────────┘ └─────────┘ └──────────┘   │         │
+                           │                                           │         │
+                           │  ┌────────────────────────────────────────┴───┐    │
+                           │  │    Filebeat → Elasticsearch :9200          │    │
+                           │  │    (Log Pipeline)                           │    │
+                           │  └────────────────────────────────────────────┘    │
+                           └───────────────────────────────────────────────────────┘
 
 Network Isolation:
-  identity-net     ──── Keycloak, Flask, Nginx, PostgreSQL, OpenBao
+  identity-net     ──── Keycloak, Flask, Nginx, PostgreSQL, OpenBao, SQLite
   monitoring-net   ──── Elasticsearch, Kibana, Filebeat, Nginx
 ```
 
 > 📘 See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed technical breakdown of each component and data flow.
+
+---
+
+## IAM Use-Case Narrative
+
+This lab models how enterprise Identity & Access Management works in practice. Here's the real-world parallel:
+
+| Lab Feature | Enterprise Equivalent | Real-World Service |
+|---|---|---|
+| **Joiner workflow** | New employee onboarding | Azure AD / Okta user provisioning |
+| **Mover workflow** | Internal transfer / role recomputation | SailPoint IdentityNow lifecycle events |
+| **Leaver workflow** | Offboarding / access revocation | ServiceNow ITSM + SCIM deprovisioning |
+| **Access Reviews** | Periodic access certification campaigns | SailPoint Access Certifications, Azure AD Access Reviews |
+| **MFA enforcement** | Step-up authentication for privileged actions | Okta Adaptive MFA, Azure Conditional Access |
+| **SIEM integration** | Identity threat detection & audit trail | Splunk, Microsoft Sentinel, Elastic SIEM |
+| **KPI Metrics** | IAM program health & operational metrics | Identity Governance dashboards |
+| **RBAC with Keycloak** | Centralized role management | Azure AD Roles, Okta Groups, CyberArk |
+| **Secrets from OpenBao** | Runtime secrets management | HashiCorp Vault, AWS Secrets Manager |
+
+### JML Lifecycle Flow
+
+```
+   Joiner                    Mover                      Leaver
+  ┌─────────┐            ┌───────────┐             ┌──────────┐
+  │ Create  │            │ Transfer  │             │ Disable  │
+  │ user    │            │ department│             │ user     │
+  │ profile │            │           │             │ account  │
+  └────┬────┘            └─────┬─────┘             └────┬─────┘
+       │                       │                        │
+       ▼                       ▼                        ▼
+  ┌─────────┐            ┌───────────┐             ┌──────────┐
+  │ Auto-   │            │ Recompute │             │ Revoke   │
+  │ assign  │            │ role from │             │ all      │
+  │ baseline│            │ dept map  │             │ roles    │
+  │ role    │            │           │             │          │
+  └────┬────┘            └─────┬─────┘             └────┬─────┘
+       │                       │                        │
+       ▼                       ▼                        ▼
+  ┌─────────┐            ┌───────────┐             ┌──────────┐
+  │ Log JML │            │ Log JML   │             │ Log JML  │
+  │ event + │            │ event +   │             │ event +  │
+  │ SIEM    │            │ SIEM      │             │ SIEM     │
+  └─────────┘            └───────────┘             └──────────┘
+```
+
+---
+
+## RBAC + MFA Policy Matrix
+
+| Route | Required Role | MFA Required | Fallback |
+|---|---|---|---|
+| `/app/` | None (public) | No | — |
+| `/app/dashboard` | Authenticated | No | Redirect to login |
+| `/app/secrets` | `zero-trust-admin` OR `zero-trust-user` | No | RBAC denied |
+| `/app/admin` | `zero-trust-admin` | Yes | MFA required page |
+| `/app/admin/iam/joiner` | `zero-trust-admin` | Yes | MFA required page |
+| `/app/admin/iam/mover` | `zero-trust-admin` | Yes | MFA required page |
+| `/app/admin/iam/leaver` | `zero-trust-admin` | Yes | MFA required page |
+| `/app/admin/reviews` | `zero-trust-admin` | Yes | MFA required page |
+| `/app/admin/reviews/decide` | `zero-trust-admin` | Yes | MFA required page |
+| `/app/admin/reviews/export` | `zero-trust-admin` | Yes | MFA required page |
+
+**MFA Enforcement Modes:**
+
+| Mode | Env Variable | Behavior |
+|---|---|---|
+| **Demo (default)** | `FLASK_ADMIN_MFA_STRICT=false` | Admin actions allowed with visible warning banner; bypass logged to SIEM |
+| **Strict** | `FLASK_ADMIN_MFA_STRICT=true` | Admin actions blocked without MFA; redirected to MFA setup page |
 
 ---
 
@@ -62,21 +138,24 @@ Network Isolation:
 | 🔒 **Least Privilege** | RBAC roles with scoped OpenBao policies (`flask-app-policy`) |
 | ⏱️ **Short-Lived Tokens** | Access tokens: 5 minutes · Sessions: 1 hour max |
 | 🔑 **Secrets Never Hardcoded** | All secrets fetched at runtime from OpenBao KV engine |
-| 📊 **All Access Logged** | Keycloak events + Nginx logs shipped to ELK for SIEM analysis |
+| 📊 **All Access Logged** | Keycloak events + Nginx logs + SIEM events shipped to ELK |
 | 🛡️ **TLS Everywhere** | Nginx enforces HTTPS with HSTS, CSP, and security headers |
-| 🔐 **MFA Ready** | TOTP/OTP configured as an available action in Keycloak |
+| 🔐 **MFA Enforcement** | TOTP/OTP enforced for admin actions with configurable strictness |
 | 🌐 **Network Isolation** | Docker networks separate identity and monitoring traffic |
+| 👤 **Identity Lifecycle** | JML workflow manages user onboarding, transfers, and offboarding |
+| ✅ **Access Certification** | Periodic access reviews with approve/revoke + audit trail |
 
 ---
 
 ## Tech Stack
 
 | Component | Technology | Version | Purpose |
-|-----------|-----------|---------|---------|
+|-----------|-----------|---------|---------| 
 | Identity Provider | Keycloak | 24.0.4 | SSO, OIDC, RBAC, MFA |
 | Secrets Engine | OpenBao | 2.0.0 | KV secrets management |
 | Reverse Proxy | Nginx | 1.25-alpine | TLS termination, security headers |
-| Demo Application | Flask (Python) | 3.0.3 | OIDC-protected web app |
+| Demo Application | Flask (Python) | 3.0.3 | OIDC-protected web app with IAM workflows |
+| IAM Data Store | SQLite | 3.x | JML records, access reviews, SIEM events |
 | Database | PostgreSQL | 16-alpine | Keycloak persistent store |
 | Search Engine | Elasticsearch | 8.13.4 | Log storage & analysis |
 | Dashboards | Kibana | 8.13.4 | SIEM visualization |
@@ -148,7 +227,7 @@ chmod +x scripts/healthcheck.sh
 
 | Username | Password | Role | Access Level |
 |----------|----------|------|-------------|
-| `ztadmin` | `Admin@123` | `zero-trust-admin` | Full administrative access |
+| `ztadmin` | `Admin@123` | `zero-trust-admin` | Full administrative access + IAM workflows |
 | `ztuser` | `User@123` | `zero-trust-user` | Standard read/write access |
 | `ztviewer` | `View@123` | `zero-trust-readonly` | Read-only access |
 
@@ -160,93 +239,175 @@ chmod +x scripts/healthcheck.sh
 
 Navigate to `https://localhost/app` and click **"Authenticate with Keycloak"**. You'll be redirected to the Keycloak login page.
 
-### 2. Log in as a Demo User
+### 2. Log in as Admin
 
-Sign in as `ztuser` with password `User@123`. Keycloak issues a short-lived JWT access token (5-minute TTL) and redirects you back to the Flask app.
+Sign in as `ztadmin` with password `Admin@123`. Keycloak issues a short-lived JWT access token (5-minute TTL) and redirects you back to the Flask app.
 
 ### 3. View the Identity Dashboard
 
 The dashboard displays:
-- Your authenticated username and email
-- Assigned Zero Trust roles (from Keycloak token claims)
-- Token expiry countdown
+- **KPI Metrics**: Onboarding time, offboarding completion, privileged accounts, MFA coverage, review completion with trend arrows
+- Your authenticated username, email, and role assignments
+- Token expiry countdown with live status chip
 - OpenBao connection status
+- **Audit Log**: Session-scoped events
+- **Live Health**: Per-service response codes and latency
+- **Security Events (SIEM)**: Persistent security event timeline with filter chips and Kibana deep-link
 
-### 4. View Secrets from OpenBao
+### 4. Manage User Lifecycle (JML)
 
-Navigate to `/secrets` to see application secrets fetched in real-time from OpenBao's KV v2 engine. All values are masked — they're never exposed in source code or environment variables.
+- **Joiner** (`/app/admin/iam/joiner`): Create a new user → auto-assigns baseline role by department
+- **Mover** (`/app/admin/iam/mover`): Transfer user to new department → role automatically recomputed
+- **Leaver** (`/app/admin/iam/leaver`): Disable user → all roles revoked, sessions invalidated
 
-### 5. Generate SIEM Events
+### 5. Conduct Access Reviews
 
-- **Failed login**: Try logging in with the wrong password — Keycloak logs a `LOGIN_ERROR` event
-- **Admin action**: Access the Keycloak admin console — logs `ADMIN_EVENT`
-- **404 errors**: Access a non-existent URL — Nginx logs generate 4xx entries
+Navigate to `/app/admin/reviews`:
+- Review each user's role assignment with risk level tagging (Low / Medium / High / Critical)
+- Approve role assignments with one click
+- Revoke elevated access with mandatory justification comment
+- Export all review decisions as CSV for compliance evidence
 
-All events flow through: **Keycloak/Nginx → Filebeat → Elasticsearch → Kibana**
+### 6. View Secrets from OpenBao
 
-### 6. View Kibana Dashboards
+Navigate to `/app/secrets` to see application secrets fetched in real-time from OpenBao's KV v2 engine. All values are masked — never exposed in source code.
 
-Navigate to `https://localhost/kibana` and explore the `zerotrust-logs-*` index pattern to see real-time identity events.
+### 7. Generate SIEM Events
+
+- **Failed login**: Try logging in with the wrong password — Keycloak logs `LOGIN_ERROR`
+- **Admin action**: Access the admin panel — logged as `admin_action`
+- **JML event**: Create/move/disable a user — logged with full audit detail
+- **Access review**: Approve or revoke — logged as `review_decision`
+- **MFA bypass**: Access admin in demo mode — logged as `mfa_bypass`
+
+All events are visible in the Dashboard's Security Events panel and flow to ELK via Filebeat.
+
+### 8. View Kibana Dashboards
+
+Navigate to `https://localhost/kibana` and explore the `zerotrust-logs-*` index pattern to see real-time identity events. Use the "Open in Kibana" button from the dashboard for pre-filtered queries.
 
 ---
 
-## Screenshots
+## JML + Access Review Test Scenarios
+
+### Joiner Test
+
+```
+1. Log in as ztadmin
+2. Navigate to /app/admin/iam/joiner
+3. Create user: username=testuser1, email=test@co.com, name=Test User, dept=Engineering
+4. Verify: success message shown, role auto-assigned = zero-trust-user
+5. Verify: user appears in Recent Joiners table
+6. Verify: security event logged in SIEM panel
+```
+
+### Mover Test
+
+```
+1. Navigate to /app/admin/iam/mover
+2. Select testuser1 → see current: Engineering / zero-trust-user
+3. Change to department: Security
+4. Verify: transfer preview shows Engineering→Security, role→zero-trust-admin
+5. Submit → verify success, role recomputed
+6. Verify: movement history updated
+```
+
+### Leaver Test
+
+```
+1. Navigate to /app/admin/iam/leaver
+2. Select testuser1
+3. Review revocation checklist → confirm disable
+4. Verify: user disabled, roles revoked
+5. Verify: user appears in Disabled Users table
+6. Verify: user no longer in Mover/Joiner active user lists
+```
+
+### Access Review Test
+
+```
+1. Navigate to /app/admin/reviews
+2. Review ztadmin → Risk Level = CRITICAL → Approve
+3. Review ztuser → Risk Level = MEDIUM → Revoke with reason: "Access no longer needed"
+4. Verify: review history updated with decision + reviewer + timestamp
+5. Click Export CSV → verify downloaded file contains decisions
+6. Verify: review completion percentage updates
+```
+
+### MFA Enforcement Test
+
+```
+# Demo mode (default):
+1. Log in as ztadmin → access /app/admin
+2. Verify: yellow "MFA Not Verified" warning banner shown
+3. Verify: admin actions still functional
+4. Verify: mfa_bypass event logged in security events
+
+# Strict mode:
+1. Set FLASK_ADMIN_MFA_STRICT=true in .env
+2. docker compose up -d flask-app
+3. Access /app/admin → verify: redirected to MFA Required page
+4. Verify: mfa_denied event in security events
+```
+
+---
+
+## KPI Metrics Explained
+
+| Metric | What It Measures | Why It Matters |
+|---|---|---|
+| **Avg. Onboarding Time** | Simulated time from joiner creation to role assignment | Slow onboarding = security gap (no access) or risk (rushed permissions) |
+| **Offboarding Completion %** | % of disabled users with all roles fully revoked | Incomplete offboarding = orphaned accounts = security risk |
+| **Privileged Accounts** | Count of users with `zero-trust-admin` role | Excessive privilege = expanded attack surface |
+| **MFA Coverage %** | % of active users with MFA configured (simulated) | Low MFA = credential theft risk |
+| **Review Completion %** | % of users with a completed access review | Low completion = stale entitlements = compliance gap |
+
+### Trend Arrows
+
+Each KPI shows a trend arrow (↑/↓/→) comparing the current value to the prior snapshot:
+- **Green ↑/↓**: Improvement (higher completion %, lower onboarding time, fewer privileged accounts)
+- **Red ↑/↓**: Degradation
+- **Gray →**: No significant change
+
+---
+
+## Screenshots Checklist
 
 > 📸 After deploying the lab, take screenshots of the following and add them to `docs/screenshots/`:
 > 
 > 1. Flask app landing page showing system status
 > 2. Keycloak OIDC login page
-> 3. Identity dashboard showing token issued/expires/remaining + status chip
-> 4. Secrets page with masked OpenBao values
-> 5. Admin page RBAC guard (`/app/admin`) for admin role
-> 6. Audit log panel with login/logout/secrets/admin events
-> 7. Live health panel showing response code, latency, and checked timestamp
-> 8. Kibana dashboard showing identity events
+> 3. Identity dashboard with KPI metrics row + trend arrows
+> 4. Security Events (SIEM) panel with filter chips
+> 5. Secrets page with masked OpenBao values
+> 6. Admin panel with IAM workflow quick-link cards
+> 7. JML Joiner page — create user form + recent joiners
+> 8. JML Mover page — transfer preview (FROM → TO)
+> 9. JML Leaver page — revocation checklist + disabled users
+> 10. Access Reviews page — risk level badges + approve/revoke
+> 11. Access Review revocation modal (reason required)
+> 12. CSV export of review decisions
+> 13. MFA warning banner (demo mode)
+> 14. MFA Required page (strict mode)
+> 15. Audit log panel with JML + review events
+> 16. Kibana dashboard showing identity events
 
 ---
 
-## Security Architecture Deep Dive
+## How This Maps to Enterprise IAM Services
 
-### How Keycloak Enforces Zero Trust
-
-Keycloak serves as the centralized Identity Provider (IdP) using OpenID Connect:
-- **Short-lived JWT tokens** (5-minute access token lifespan) minimize the window of compromise
-- **Role-Based Access Control (RBAC)** with three granular roles: admin, user, readonly
-- **Brute force protection** locks accounts after 5 failed attempts
-- **Password policy** enforces complexity (8+ chars, uppercase, digit, special char)
-- **TOTP/MFA** is configured and available for all users
-- **Event logging** captures all login attempts, admin actions, and token exchanges
-
-### How OpenBao Manages Secrets
-
-OpenBao (open-source Vault fork) provides runtime secret management:
-- Secrets are stored in a **KV v2 secrets engine** — versioned and auditable
-- The Flask app fetches secrets via **HTTP API** at startup and on demand
-- A scoped **flask-app-policy** restricts access to only `secret/data/flask-app/*`
-- **No secrets exist in source code, Dockerfiles, or environment variables**
-- In production, AppRole or Kubernetes auth would replace the dev token
-
-### How Nginx Acts as Zero Trust Enforcement Layer
-
-Nginx serves as the TLS gateway and security boundary:
-- **TLS termination** — all external traffic is HTTPS-only (HTTP 301 → HTTPS)
-- **Security headers**: HSTS, CSP, X-Frame-Options, X-Content-Type-Options
-- **Proxy headers**: X-Forwarded-For, X-Real-IP for audit trails
-- **JSON access logs** enable structured parsing by Filebeat
-- **Custom error pages** (403, 502) with branded Zero Trust messaging
-
-### How ELK Provides Real-Time Threat Visibility
-
-The ELK Stack creates a SIEM pipeline for identity threat monitoring:
-- **Filebeat** ships Keycloak and Nginx logs to Elasticsearch
-- **Elasticsearch** indexes events with the `zerotrust-logs-*` pattern
-- **Kibana** provides dashboards for:
-  - Failed login attempts over time (detect brute force)
-  - Successful logins by user (detect anomalous access)
-  - Admin actions log (detect privilege escalation)
-  - Nginx 4xx/5xx errors (detect scanning/attacks)
-
-> See [docs/setup-guide.md](docs/setup-guide.md) for Kibana dashboard creation steps.
+| This Lab | Azure AD / Entra ID | Okta | SailPoint |
+|---|---|---|---|
+| Keycloak OIDC SSO | Azure AD App Registration | Okta OIDC Integration | — |
+| JML Joiner | Azure AD user provisioning via SCIM | Okta lifecycle hooks | IdentityNow Joiner Rule |
+| JML Mover | Azure AD dynamic groups | Okta profile attribute mapping | IdentityNow Mover Rule |
+| JML Leaver | Azure AD user disable + licence revoke | Okta deactivate user | IdentityNow Leaver Rule |
+| Access Reviews | Azure AD Access Reviews | Okta Access Certifications | Access Campaigns |
+| MFA Enforcement | Conditional Access + MFA challenge | Adaptive MFA policies | — |
+| Security Events | Azure AD Sign-in Logs + Sentinel | Okta System Log | Activity Monitoring |
+| KPI Dashboard | Identity Governance Analytics | Okta Reports | IdentityNow Dashboards |
+| OpenBao Secrets | Azure Key Vault | Okta Credential Management | — |
+| RBAC | Azure AD Roles + Privileged Identity Mgmt | Okta Groups + App Assignments | Entitlements |
 
 ---
 
@@ -272,8 +433,17 @@ zero-trust-identity-lab/
 ├── flask-app/
 │   ├── Dockerfile              # Python 3.12 container image
 │   ├── requirements.txt        # Pinned Python dependencies
-│   ├── app.py                  # OIDC + OpenBao integration
-│   └── templates/              # Bootstrap 5 HTML templates
+│   ├── app.py                  # OIDC + OpenBao + IAM workflows
+│   ├── iam_store.py            # SQLite IAM data layer
+│   └── templates/
+│       ├── index.html          # Public landing page
+│       ├── dashboard.html      # Dashboard + SIEM + KPIs
+│       ├── login_required.html # Auth/session failure page
+│       ├── mfa_required.html   # MFA enforcement page
+│       ├── iam_joiner.html     # JML Joiner workflow
+│       ├── iam_mover.html      # JML Mover workflow
+│       ├── iam_leaver.html     # JML Leaver workflow
+│       └── access_reviews.html # Access review certifications
 ├── elk/
 │   ├── elasticsearch/          # ES single-node config
 │   ├── kibana/                 # Kibana config with base path
@@ -345,16 +515,18 @@ curl -k https://localhost/app/health
 curl -kI https://localhost/app/secrets
 curl -kI https://localhost/app/admin
 
-# 4) Verify OpenBao access with app-scoped token from Flask container
-docker compose exec -T flask-app python -c "import requests; tok=open('/run/secrets/openbao/flask-app-token','r',encoding='utf-8').read().strip(); base='http://openbao:8200/v1'; hdr={'X-Vault-Token':tok}; print('db',requests.get(f'{base}/secret/data/flask-app/db',headers=hdr,timeout=5).status_code); print('api',requests.get(f'{base}/secret/data/flask-app/api',headers=hdr,timeout=5).status_code); print('config',requests.get(f'{base}/secret/data/flask-app/config',headers=hdr,timeout=5).status_code)"
-```
+# 4) Verify IAM routes exist (302 redirects to login when unauthenticated)
+curl -kI https://localhost/app/admin/iam/joiner
+curl -kI https://localhost/app/admin/iam/mover
+curl -kI https://localhost/app/admin/iam/leaver
+curl -kI https://localhost/app/admin/reviews
 
-Expected:
-- Dashboard shows issued time, expiry time, remaining countdown, and token status chip (`VALID`, `EXPIRING SOON`, or `EXPIRED`)
-- Expired sessions redirect to sign-in-required page with a clear message
-- `/app/admin` redirects to auth-required page when role policy fails
-- Audit panel records login, secrets access, admin access, logout, and expiry/denied events
-- Health panel displays per-service response code, latency (ms), and checked timestamp
+# 5) Verify OpenBao access with app-scoped token from Flask container
+docker compose exec -T flask-app python -c "import requests; tok=open('/run/secrets/openbao/flask-app-token','r',encoding='utf-8').read().strip(); base='http://openbao:8200/v1'; hdr={'X-Vault-Token':tok}; print('db',requests.get(f'{base}/secret/data/flask-app/db',headers=hdr,timeout=5).status_code); print('api',requests.get(f'{base}/secret/data/flask-app/api',headers=hdr,timeout=5).status_code); print('config',requests.get(f'{base}/secret/data/flask-app/config',headers=hdr,timeout=5).status_code)"
+
+# 6) Verify SQLite database exists
+docker compose exec flask-app ls -la /app/data/iam.db
+```
 
 ### Quick Fixes
 
@@ -376,8 +548,8 @@ docker compose ps
 
 ## CV-Ready Description
 
-> **Project:** Zero Trust Identity & Secrets Management Lab  
-> Designed and deployed a Zero Trust identity platform using Keycloak 24 (IAM/SSO/OIDC), OpenBao (secrets management), and Nginx (TLS reverse proxy) orchestrated via Docker Compose. Implemented RBAC, MFA, and short-lived JWT access tokens. Built a Python/Flask demo application that fetches secrets dynamically from OpenBao at runtime — no credentials in code or environment variables. Forwarded Keycloak audit logs and Nginx access logs to Elasticsearch via Filebeat and built Kibana dashboards for real-time identity threat monitoring. Stack mirrors enterprise Zero Trust deployments used in Identity Security Engineering roles.
+> **Project:** Zero Trust Identity & IAM Workflow Lab  
+> Designed and deployed a Zero Trust identity platform using Keycloak 24 (IAM/SSO/OIDC), OpenBao (secrets management), and Nginx (TLS reverse proxy) orchestrated via Docker Compose. Built a complete Joiner/Mover/Leaver identity lifecycle engine with automatic role assignment by department, access review certification workflow with CSV export, and MFA enforcement for privileged actions. Implemented RBAC with three granular roles, short-lived JWT tokens, and runtime secrets from OpenBao — zero credentials in code. Created an in-app SIEM evidence dashboard logging all identity events (login, RBAC denials, JML actions, review decisions, MFA bypass) with Kibana deep-links. Built KPI metrics tracking onboarding time, offboarding completion, privileged account count, MFA coverage, and review completion with automated trend analysis. All audit events forwarded to Elasticsearch via Filebeat for real-time threat monitoring. Stack mirrors enterprise IAM deployments (Azure AD, Okta, SailPoint) used in Identity Security Engineering roles.
 
 ---
 

@@ -3,21 +3,31 @@ Zero Trust Identity Lab — Flask Demo Application
 ═══════════════════════════════════════════════════
 Demonstrates OIDC authentication via Keycloak and
 runtime secret fetching from OpenBao.
+
+Extended with:
+  - JML (Joiner/Mover/Leaver) lifecycle management
+  - Access review workflow with CSV export
+  - Privileged access + MFA enforcement
+  - In-app SIEM security events
+  - Impact metrics KPI dashboard
 """
 
 import os
 import json
 import base64
 import logging
+from urllib.parse import quote
 from datetime import datetime, timezone
 import urllib3
 
 from flask import (
     Flask, redirect, session, render_template, request,
-    jsonify
+    jsonify, Response
 )
 from authlib.integrations.flask_client import OAuth
 import requests as http_requests
+
+import iam_store
 
 # ═══════════════════════════════════════════════════
 # Configuration
@@ -61,6 +71,18 @@ ENABLE_SILENT_REFRESH = os.environ.get("FLASK_ENABLE_SILENT_REFRESH", "false").l
 SHOW_HEALTH_DEBUG = os.environ.get("FLASK_SHOW_HEALTH_DEBUG", "false").lower() == "true"
 EXPIRING_SOON_SECONDS = int(os.environ.get("FLASK_EXPIRING_SOON_SECONDS", "120"))
 AUDIT_LOG_LIMIT = int(os.environ.get("FLASK_AUDIT_LOG_LIMIT", "25"))
+
+# MFA enforcement toggle —
+#   false (default) = dev/demo bypass with warning banner
+#   true            = strict MFA enforcement for admin actions
+ADMIN_MFA_STRICT = os.environ.get("FLASK_ADMIN_MFA_STRICT", "false").lower() == "true"
+
+# Open Discover with a safe default: no strict filter + wider time window.
+KIBANA_DISCOVER_URL = (
+    "https://localhost/kibana/app/discover"
+    "#/?_g=(time:(from:now-24h,to:now))"
+    "&_a=(query:(language:kuery,query:''))"
+)
 
 # ═══════════════════════════════════════════════════
 # OAuth2 / OIDC Setup (Authlib)
@@ -410,8 +432,31 @@ def try_silent_refresh():
         return False
 
 
-def require_session(required_roles=None):
-    """Auth/session guard with expiry handling and optional RBAC."""
+def _get_client_ip():
+    """Get client IP from X-Forwarded-For or remote_addr."""
+    return request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
+
+
+def _check_mfa_claim():
+    """
+    Check if the current session has an MFA claim.
+    Returns (has_mfa: bool, mfa_bypass: bool).
+    """
+    claims = session.get("token_claims", {})
+    acr = claims.get("acr", "")
+    amr = claims.get("amr", [])
+    if not isinstance(amr, list):
+        amr = []
+
+    has_mfa = (
+        acr in ("urn:oasis:names:tc:SAML:2.0:ac:classes:mfa", "2", "silver", "gold")
+        or any(m in amr for m in ("otp", "totp", "mfa"))
+    )
+    return has_mfa
+
+
+def require_session(required_roles=None, mfa_required=False):
+    """Auth/session guard with expiry handling, optional RBAC, and MFA enforcement."""
     if not session.get("authenticated"):
         return redirect("/app/login-required?error=Authentication required.")
 
@@ -439,13 +484,50 @@ def require_session(required_roles=None):
         expected_roles = set([r.lower() for r in required_roles])
         if not user_roles.intersection(expected_roles):
             append_audit_event("rbac_denied", "warning", f"Required roles: {', '.join(required_roles)}")
+            iam_store.log_security_event(
+                "rbac_denied", "warning", user.get("username", "unknown"),
+                f"Denied access; required: {', '.join(required_roles)}",
+                ip_address=_get_client_ip(),
+            )
             return redirect("/app/login-required?error=Access denied by role policy.")
+
+    # MFA enforcement
+    if mfa_required:
+        has_mfa = _check_mfa_claim()
+        if not has_mfa:
+            if ADMIN_MFA_STRICT:
+                # Strict mode — deny access entirely
+                append_audit_event("mfa_denied", "warning", "MFA required but not present (strict mode)")
+                iam_store.log_security_event(
+                    "mfa_denied", "warning", user.get("username", "unknown"),
+                    "Admin action denied — MFA not present (strict enforcement)",
+                    ip_address=_get_client_ip(),
+                )
+                return render_template("mfa_required.html",
+                    error="Your session does not include an MFA claim. "
+                          "Configure TOTP in Keycloak and re-authenticate."
+                ), 403
+            else:
+                # Dev/demo bypass — allow with warning, log the bypass
+                iam_store.log_security_event(
+                    "mfa_bypass", "warning", user.get("username", "unknown"),
+                    "Admin action permitted without MFA (demo mode)",
+                    ip_address=_get_client_ip(),
+                )
+                session["mfa_bypass"] = True
+        else:
+            session["mfa_bypass"] = False
+            iam_store.log_security_event(
+                "mfa_verified", "info", user.get("username", "unknown"),
+                "MFA claim verified for admin action",
+                ip_address=_get_client_ip(),
+            )
 
     return None
 
 
 # ═══════════════════════════════════════════════════
-# Routes
+# Routes — Core
 # ═══════════════════════════════════════════════════
 
 @app.route("/")
@@ -488,6 +570,7 @@ def callback():
     try:
         token = oauth.keycloak.authorize_access_token()
         id_claims = decode_jwt_claims(token.get("id_token")) if token.get("id_token") else {}
+        access_claims = decode_jwt_claims(token.get("access_token")) if token.get("access_token") else {}
         claims = extract_claims(token)
         roles = extract_roles(claims, KC_CLIENT_ID)
         issued_unix, expiry_unix, auth_time_unix, timing_source = compute_token_times(token, id_claims)
@@ -510,6 +593,12 @@ def callback():
         else:
             session.pop("auth_time_unix", None)
 
+        # Store MFA-related claims for later enforcement checks
+        session["token_claims"] = {
+            "acr": access_claims.get("acr", id_claims.get("acr", "")),
+            "amr": access_claims.get("amr", id_claims.get("amr", [])),
+        }
+
         if ENABLE_SILENT_REFRESH and token.get("refresh_token"):
             session["refresh_token"] = token.get("refresh_token")
         else:
@@ -522,6 +611,13 @@ def callback():
 
         session["authenticated"] = True
         append_audit_event("login", "ok", f"user={preferred_username}")
+
+        # Log to persistent security events
+        iam_store.log_security_event(
+            "login_success", "info", preferred_username,
+            f"OIDC login successful, roles={roles}",
+            ip_address=_get_client_ip(),
+        )
 
         logger.info(
             "OIDC callback roles extracted user=%s roles=%s",
@@ -543,6 +639,11 @@ def callback():
         return redirect("/app/dashboard")
     except Exception as e:
         logger.error("OIDC callback error: %s", e)
+        iam_store.log_security_event(
+            "login_fail", "error", "unknown",
+            f"OIDC callback failed: {str(e)}",
+            ip_address=_get_client_ip(),
+        )
         return render_template(
             "login_required.html",
             error=f"Authentication failed: {str(e)}",
@@ -566,14 +667,53 @@ def dashboard():
     live_health = collect_live_health()
     bao_healthy = live_health["summary"]["openbao"]
 
+    # Compute KPI metrics
+    metrics = iam_store.get_metrics_with_trends()
+
+    # Fetch recent security events for SIEM panel
+    security_events = iam_store.get_security_events(limit=50)
+    kibana_error = request.args.get("kibana_error") == "1"
+
     return render_template(
         "dashboard.html",
         user=user,
         openbao_status=bao_healthy,
         live_health=live_health,
         audit_logs=session.get("audit_logs", []),
+        metrics=metrics,
+        security_events=security_events,
+        kibana_error=kibana_error,
         active_page="dashboard",
     )
+
+
+@app.route("/kibana/discover")
+def launch_kibana_discover():
+    """Open Kibana discover with a guard to avoid raw 502 errors."""
+    guard = require_session()
+    if guard:
+        return guard
+
+    user = get_user_info() or {}
+    kibana_probe = probe_endpoint("https://nginx/kibana/api/status", timeout=3)
+
+    if not kibana_probe.get("healthy"):
+        detail_parts = ["Kibana unavailable from dashboard link"]
+        if kibana_probe.get("response_code") is not None:
+            detail_parts.append(f"code={kibana_probe['response_code']}")
+        if kibana_probe.get("exception"):
+            detail_parts.append(f"error={kibana_probe['exception']}")
+        detail = " | ".join(detail_parts)
+
+        append_audit_event("kibana_unavailable", "warning", detail)
+        iam_store.log_security_event(
+            "kibana_unavailable", "warning", user.get("username", "unknown"),
+            detail,
+            ip_address=_get_client_ip(),
+        )
+        return redirect("/app/dashboard?kibana_error=1")
+
+    return redirect(KIBANA_DISCOVER_URL)
 
 
 @app.route("/secrets")
@@ -591,6 +731,11 @@ def secrets():
 
     if bao_healthy:
         append_audit_event("secrets_access", "ok", "Viewed secrets data")
+        iam_store.log_security_event(
+            "secret_access", "info", user.get("username", "unknown"),
+            "Viewed OpenBao secrets (masked)",
+            ip_address=_get_client_ip(),
+        )
         for path in ["flask-app/db", "flask-app/api", "flask-app/config"]:
             fetched = fetch_openbao_secrets(path)
             if fetched:
@@ -615,11 +760,17 @@ def secrets():
 @app.route("/admin")
 def admin():
     """Admin-only page for privileged operations demo."""
-    guard = require_session(required_roles=["zero-trust-admin"])
+    guard = require_session(required_roles=["zero-trust-admin"], mfa_required=True)
     if guard:
         return guard
 
     append_audit_event("admin_access", "ok", "Visited admin panel")
+    iam_store.log_security_event(
+        "admin_action", "info",
+        get_user_info().get("username", "unknown"),
+        "Accessed admin panel",
+        ip_address=_get_client_ip(),
+    )
     user = get_user_info()
     live_health = collect_live_health()
 
@@ -630,7 +781,305 @@ def admin():
         live_health=live_health,
         audit_logs=session.get("audit_logs", []),
         active_page="admin",
+        mfa_bypass=session.get("mfa_bypass", False),
     )
+
+
+# ═══════════════════════════════════════════════════
+# Routes — JML Lifecycle
+# ═══════════════════════════════════════════════════
+
+@app.route("/admin/iam/joiner", methods=["GET", "POST"])
+def iam_joiner():
+    """JML Joiner — create a new user profile with baseline role."""
+    guard = require_session(required_roles=["zero-trust-admin"], mfa_required=True)
+    if guard:
+        return guard
+
+    user = get_user_info()
+    error = None
+    success = None
+
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        email = (request.form.get("email") or "").strip()
+        full_name = (request.form.get("full_name") or "").strip()
+        department = (request.form.get("department") or "").strip()
+
+        if not all([username, email, full_name, department]):
+            error = "All fields are required."
+        elif department not in iam_store.DEPARTMENTS:
+            error = f"Invalid department: {department}"
+        else:
+            uid, err = iam_store.create_iam_user(
+                username, email, full_name, department,
+                performed_by=user.get("username", "unknown"),
+            )
+            if err:
+                error = err
+            else:
+                role = iam_store.DEPARTMENT_ROLE_MAP.get(department, "")
+                success = f"User '{username}' created in {department} with role '{role}'."
+                append_audit_event("jml_joiner", "ok", f"Created user {username}")
+                iam_store.log_security_event(
+                    "admin_action", "info", user.get("username", "unknown"),
+                    f"JML Joiner: created {username} in {department} (role={role})",
+                    ip_address=_get_client_ip(),
+                )
+
+    recent_events = iam_store.get_jml_events(event_type="joiner", limit=20)
+
+    return render_template(
+        "iam_joiner.html",
+        user=user,
+        error=error,
+        success=success,
+        departments=iam_store.DEPARTMENTS,
+        dept_role_map=iam_store.DEPARTMENT_ROLE_MAP,
+        dept_role_map_json=json.dumps(iam_store.DEPARTMENT_ROLE_MAP),
+        recent_events=recent_events,
+        mfa_bypass=session.get("mfa_bypass", False),
+    )
+
+
+@app.route("/admin/iam/mover", methods=["GET", "POST"])
+def iam_mover():
+    """JML Mover — change department and recompute role."""
+    guard = require_session(required_roles=["zero-trust-admin"], mfa_required=True)
+    if guard:
+        return guard
+
+    user = get_user_info()
+    error = None
+    success = None
+
+    if request.method == "POST":
+        user_id = request.form.get("user_id")
+        new_department = (request.form.get("new_department") or "").strip()
+
+        if not user_id or not new_department:
+            error = "Please select a user and new department."
+        elif new_department not in iam_store.DEPARTMENTS:
+            error = f"Invalid department: {new_department}"
+        else:
+            try:
+                uid = int(user_id)
+            except ValueError:
+                error = "Invalid user ID."
+                uid = None
+
+            if uid is not None:
+                ok, err = iam_store.move_iam_user(
+                    uid, new_department,
+                    performed_by=user.get("username", "unknown"),
+                )
+                if err:
+                    error = err
+                else:
+                    target = iam_store.get_iam_user(uid)
+                    tname = target["username"] if target else f"ID:{uid}"
+                    success = f"User '{tname}' transferred to {new_department}."
+                    append_audit_event("jml_mover", "ok", f"Moved {tname} to {new_department}")
+                    iam_store.log_security_event(
+                        "admin_action", "info", user.get("username", "unknown"),
+                        f"JML Mover: transferred {tname} to {new_department}",
+                        ip_address=_get_client_ip(),
+                    )
+
+    active_users = iam_store.get_all_iam_users(status="active")
+    recent_events = iam_store.get_jml_events(event_type="mover", limit=20)
+
+    return render_template(
+        "iam_mover.html",
+        user=user,
+        error=error,
+        success=success,
+        active_users=active_users,
+        departments=iam_store.DEPARTMENTS,
+        dept_role_map=iam_store.DEPARTMENT_ROLE_MAP,
+        dept_role_map_json=json.dumps(iam_store.DEPARTMENT_ROLE_MAP),
+        recent_events=recent_events,
+        mfa_bypass=session.get("mfa_bypass", False),
+    )
+
+
+@app.route("/admin/iam/leaver", methods=["GET", "POST"])
+def iam_leaver():
+    """JML Leaver — disable user and revoke all roles/sessions."""
+    guard = require_session(required_roles=["zero-trust-admin"], mfa_required=True)
+    if guard:
+        return guard
+
+    user = get_user_info()
+    error = None
+    success = None
+
+    if request.method == "POST":
+        user_id = request.form.get("user_id")
+
+        if not user_id:
+            error = "Please select a user to offboard."
+        else:
+            try:
+                uid = int(user_id)
+            except ValueError:
+                error = "Invalid user ID."
+                uid = None
+
+            if uid is not None:
+                target = iam_store.get_iam_user(uid)
+                ok, err = iam_store.disable_iam_user(
+                    uid,
+                    performed_by=user.get("username", "unknown"),
+                )
+                if err:
+                    error = err
+                else:
+                    tname = target["username"] if target else f"ID:{uid}"
+                    success = f"User '{tname}' has been disabled. All roles revoked."
+                    append_audit_event("jml_leaver", "ok", f"Disabled user {tname}")
+                    iam_store.log_security_event(
+                        "admin_action", "info", user.get("username", "unknown"),
+                        f"JML Leaver: disabled {tname}, roles revoked",
+                        ip_address=_get_client_ip(),
+                    )
+
+    active_users = iam_store.get_all_iam_users(status="active")
+    disabled_users = iam_store.get_all_iam_users(status="disabled")
+    recent_events = iam_store.get_jml_events(event_type="leaver", limit=20)
+
+    return render_template(
+        "iam_leaver.html",
+        user=user,
+        error=error,
+        success=success,
+        active_users=active_users,
+        disabled_users=disabled_users,
+        recent_events=recent_events,
+        mfa_bypass=session.get("mfa_bypass", False),
+    )
+
+
+# ═══════════════════════════════════════════════════
+# Routes — Access Reviews
+# ═══════════════════════════════════════════════════
+
+@app.route("/admin/reviews")
+def access_reviews():
+    """Access review dashboard — list users and role assignments."""
+    guard = require_session(required_roles=["zero-trust-admin"], mfa_required=True)
+    if guard:
+        return guard
+
+    user = get_user_info()
+    pending = iam_store.get_pending_reviews()
+    history = iam_store.get_review_history(limit=50)
+
+    # Compute completion percentage
+    total = len(pending)
+    reviewed = sum(1 for p in pending if p.get("last_review") and p["last_review"].get("decision"))
+    completion_pct = round((reviewed / total) * 100, 0) if total > 0 else 0
+
+    return render_template(
+        "access_reviews.html",
+        user=user,
+        pending_reviews=pending,
+        review_history=history,
+        review_completion_pct=int(completion_pct),
+        error=request.args.get("error"),
+        success=request.args.get("success"),
+        mfa_bypass=session.get("mfa_bypass", False),
+    )
+
+
+@app.route("/admin/reviews/decide", methods=["POST"])
+def review_decide():
+    """Process an access review decision (approve or revoke)."""
+    guard = require_session(required_roles=["zero-trust-admin"], mfa_required=True)
+    if guard:
+        return guard
+
+    user = get_user_info()
+    user_id = request.form.get("user_id")
+    username = request.form.get("username", "")
+    role = request.form.get("role", "")
+    risk_level = request.form.get("risk_level", "")
+    decision = request.form.get("decision", "")
+    reason = (request.form.get("reason") or "").strip()
+
+    if not all([user_id, username, role, decision]):
+        return redirect("/app/admin/reviews?error=Missing required fields.")
+
+    if decision == "revoked" and len(reason) < 5:
+        return redirect("/app/admin/reviews?error=Revocation requires a reason (min 5 chars).")
+
+    try:
+        uid = int(user_id)
+    except ValueError:
+        return redirect("/app/admin/reviews?error=Invalid user ID.")
+
+    reviewer = user.get("username", "unknown")
+
+    iam_store.save_review_decision(
+        uid, username, role, risk_level, decision,
+        reason if decision == "revoked" else "Role assignment approved",
+        reviewer,
+    )
+
+    append_audit_event("review_decision", "ok", f"{decision} {role} for {username}")
+    iam_store.log_security_event(
+        "review_decision", "info" if decision == "approved" else "warning",
+        reviewer,
+        f"Access review: {decision} role '{role}' for {username}"
+        + (f" — reason: {reason}" if reason else ""),
+        ip_address=_get_client_ip(),
+    )
+
+    return redirect(f"/app/admin/reviews?success=Review recorded: {decision} '{role}' for {username}.")
+
+
+@app.route("/admin/reviews/export")
+def reviews_export():
+    """Export access review decisions as CSV."""
+    guard = require_session(required_roles=["zero-trust-admin"], mfa_required=True)
+    if guard:
+        return guard
+
+    csv_data = iam_store.export_reviews_csv()
+
+    iam_store.log_security_event(
+        "admin_action", "info",
+        get_user_info().get("username", "unknown"),
+        "Exported access review CSV",
+        ip_address=_get_client_ip(),
+    )
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=access_reviews.csv"},
+    )
+
+
+# ═══════════════════════════════════════════════════
+# Routes — API Endpoints
+# ═══════════════════════════════════════════════════
+
+@app.route("/api/security-events")
+def api_security_events():
+    """JSON endpoint for security events (SIEM panel async loading)."""
+    guard = require_session()
+    if guard:
+        return jsonify({"error": "Authentication required"}), 401
+
+    event_type = request.args.get("type")
+    severity = request.args.get("severity")
+    limit = min(int(request.args.get("limit", 50)), 200)
+
+    events = iam_store.get_security_events(
+        event_type=event_type, severity=severity, limit=limit
+    )
+    return jsonify(events)
 
 
 @app.route("/debug-auth")
@@ -649,6 +1098,8 @@ def debug_auth():
         "extracted_roles": user.get("all_roles", []),
         "token_issued_unix": session.get("token_issued_unix"),
         "token_expiry_unix": session.get("token_expiry_unix"),
+        "token_claims": session.get("token_claims", {}),
+        "mfa_strict": ADMIN_MFA_STRICT,
         "now_unix": now_unix(),
     })
 
@@ -656,8 +1107,18 @@ def debug_auth():
 @app.route("/logout")
 def logout():
     """Clear session and redirect to Keycloak logout."""
+    user = get_user_info()
+    username = user.get("username", "unknown") if user else "unknown"
+
     id_token_hint = session.get("id_token_hint")
     append_audit_event("logout_initiated", "ok", "User started logout flow")
+
+    # Log logout to persistent security events
+    iam_store.log_security_event(
+        "logout", "info", username,
+        "User initiated logout",
+        ip_address=_get_client_ip(),
+    )
 
     if not id_token_hint:
         append_audit_event("logout_completed_local_only", "warning", "id_token_hint missing; Keycloak logout skipped")
@@ -710,5 +1171,12 @@ def startup_config():
 
 
 if __name__ == "__main__":
+    # Initialize IAM data store
+    logger.info("Initializing IAM data store...")
+    os.makedirs("/app/data", exist_ok=True)
+    iam_store.init_db()
+    logger.info("IAM data store ready (SQLite at %s)", iam_store.DB_PATH)
+    logger.info("MFA enforcement mode: %s", "STRICT" if ADMIN_MFA_STRICT else "DEMO (bypass with warning)")
+
     startup_config()
     app.run(host="0.0.0.0", port=5000, debug=False)

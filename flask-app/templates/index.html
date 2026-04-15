@@ -1,47 +1,107 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Zero Trust Identity & Secrets Management Lab — Demonstrating enterprise-grade IAM with Keycloak, OpenBao, and ELK Stack.">
+    <meta name="description"
+        content="Zero Trust Identity & Secrets Management Lab — Demonstrating enterprise-grade IAM with Keycloak, OpenBao, and ELK Stack.">
     <title>Zero Trust Identity Lab</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
-        :root { --zt-primary: #0d6efd; --zt-success: #198754; --zt-danger: #dc3545; --zt-dark: #0a0e17; }
-        body { background: var(--zt-dark); min-height: 100vh; }
-        .hero-section { 
+        :root {
+            --zt-primary: #0d6efd;
+            --zt-success: #198754;
+            --zt-danger: #dc3545;
+            --zt-dark: #0a0e17;
+        }
+
+        body {
+            background: var(--zt-dark);
+            min-height: 100vh;
+        }
+
+        .hero-section {
             background: linear-gradient(135deg, #0a0e17 0%, #1a1e2e 50%, #0d1b2a 100%);
-            min-height: 60vh; display: flex; align-items: center;
-            border-bottom: 1px solid rgba(13,110,253,0.2);
+            min-height: 60vh;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(13, 110, 253, 0.2);
         }
-        .glow-text { text-shadow: 0 0 20px rgba(13,110,253,0.3); }
-        .status-card { 
-            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 12px; transition: all 0.3s ease;
+
+        .glow-text {
+            text-shadow: 0 0 20px rgba(13, 110, 253, 0.3);
         }
-        .status-card:hover { 
-            background: rgba(255,255,255,0.06); border-color: rgba(13,110,253,0.3);
-            transform: translateY(-2px);
-        }
-        .status-indicator { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
-        .status-indicator.online { background: #198754; box-shadow: 0 0 8px rgba(25,135,84,0.6); }
-        .status-indicator.offline { background: #dc3545; box-shadow: 0 0 8px rgba(220,53,69,0.6); }
-        .nav-zt { background: rgba(10,14,23,0.95); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .feature-icon { font-size: 2rem; color: var(--zt-primary); margin-bottom: 1rem; }
-        .btn-zt { 
-            background: linear-gradient(135deg, #0d6efd, #0a58ca); border: none;
-            padding: 12px 32px; font-weight: 600; letter-spacing: 0.5px;
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
             transition: all 0.3s ease;
         }
-        .btn-zt:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(13,110,253,0.4); }
-        .architecture-box { 
-            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.75rem;
-            color: #8b949e; overflow-x: auto;
+
+        .status-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(13, 110, 253, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-indicator.online {
+            background: #198754;
+            box-shadow: 0 0 8px rgba(25, 135, 84, 0.6);
+        }
+
+        .status-indicator.offline {
+            background: #dc3545;
+            box-shadow: 0 0 8px rgba(220, 53, 69, 0.6);
+        }
+
+        .nav-zt {
+            background: rgba(10, 14, 23, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            color: var(--zt-primary);
+            margin-bottom: 1rem;
+        }
+
+        .btn-zt {
+            background: linear-gradient(135deg, #0d6efd, #0a58ca);
+            border: none;
+            padding: 12px 32px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-zt:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(13, 110, 253, 0.4);
+        }
+
+        .architecture-box {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: #8b949e;
+            overflow-x: auto;
         }
     </style>
 </head>
+
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg nav-zt fixed-top">
@@ -72,7 +132,7 @@
                 Zero Trust Identity Lab
             </h1>
             <p class="lead text-secondary mb-2" style="max-width: 700px; margin: 0 auto;">
-                Enterprise-grade Identity & Access Management with Keycloak SSO, 
+                Enterprise-grade Identity & Access Management with Keycloak SSO,
                 OpenBao Secrets Engine, and real-time SIEM monitoring.
             </p>
             <p class="text-secondary small mb-4">
@@ -157,35 +217,40 @@
                     <div class="status-card p-4 text-center h-100">
                         <div class="feature-icon"><i class="bi bi-fingerprint"></i></div>
                         <h5>Never Trust, Always Verify</h5>
-                        <p class="text-secondary small">Every request is authenticated and authorized via Keycloak OIDC tokens.</p>
+                        <p class="text-secondary small">Every request is authenticated and authorized via Keycloak OIDC
+                            tokens.</p>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="status-card p-4 text-center h-100">
                         <div class="feature-icon"><i class="bi bi-clock-history"></i></div>
                         <h5>Short-Lived Tokens</h5>
-                        <p class="text-secondary small">Access tokens expire in 5 minutes. Sessions max out at 1 hour.</p>
+                        <p class="text-secondary small">Access tokens expire in 5 minutes. Sessions max out at 1 hour.
+                        </p>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="status-card p-4 text-center h-100">
                         <div class="feature-icon"><i class="bi bi-key"></i></div>
                         <h5>Secrets Never Hardcoded</h5>
-                        <p class="text-secondary small">All secrets fetched at runtime from OpenBao — never in code or env vars.</p>
+                        <p class="text-secondary small">All secrets fetched at runtime from OpenBao — never in code or
+                            env vars.</p>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="status-card p-4 text-center h-100">
                         <div class="feature-icon"><i class="bi bi-person-check"></i></div>
                         <h5>Least Privilege Access</h5>
-                        <p class="text-secondary small">Role-based access control with granular policies for each service.</p>
+                        <p class="text-secondary small">Role-based access control with granular policies for each
+                            service.</p>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="status-card p-4 text-center h-100">
                         <div class="feature-icon"><i class="bi bi-graph-up"></i></div>
                         <h5>Continuous Monitoring</h5>
-                        <p class="text-secondary small">All identity events shipped to ELK Stack for real-time threat detection.</p>
+                        <p class="text-secondary small">All identity events shipped to ELK Stack for real-time threat
+                            detection.</p>
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -202,28 +267,151 @@
     <!-- Architecture Preview -->
     <section class="py-5">
         <div class="container">
-            <h2 class="text-center mb-4 fw-bold">
+            <h2 class="text-center mb-5 fw-bold">
                 <i class="bi bi-diagram-3 me-2 text-primary"></i>Architecture
             </h2>
-            <div class="architecture-box p-4 mx-auto" style="max-width: 780px;">
-<pre class="mb-0" style="color: #8b949e;">
-┌─────────────┐     HTTPS/443     ┌──────────────────┐
-│   Browser   │ ────────────────► │   Nginx (TLS)    │
-└─────────────┘                   │  Reverse Proxy   │
-                                  └──────┬───────────┘
-                        ┌────────────────┼────────────────┐
-                        ▼                ▼                ▼
-                ┌──────────────┐ ┌──────────────┐ ┌────────────┐
-                │   Keycloak   │ │  Flask App   │ │   Kibana   │
-                │  (IdP/SSO)   │ │  (Demo App)  │ │   (SIEM)   │
-                └──────┬───────┘ └──────┬───────┘ └────────────┘
-                       │                │                ▲
-                       ▼                ▼                │
-                ┌──────────────┐ ┌──────────────┐ ┌────────────┐
-                │  PostgreSQL  │ │   OpenBao    │ │ Filebeat → │
-                │   (DB)       │ │  (Secrets)   │ │ Elastic    │
-                └──────────────┘ └──────────────┘ └────────────┘
-</pre>
+            <div class="architecture-diagram p-4 mx-auto" style="max-width: 900px;">
+                <style>
+                    .diagram-node {
+                        background: rgba(10, 14, 23, 0.8);
+                        border: 1px solid rgba(13, 110, 253, 0.3);
+                        border-radius: 8px;
+                        padding: 1.5rem 1rem;
+                        text-align: center;
+                        position: relative;
+                        z-index: 2;
+                        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+                        transition: all 0.3s ease;
+                    }
+
+                    .diagram-node:hover {
+                        border-color: rgba(13, 110, 253, 0.8);
+                        box-shadow: 0 0 20px rgba(13, 110, 253, 0.2);
+                        transform: translateY(-2px);
+                    }
+
+                    .node-icon {
+                        font-size: 2rem;
+                        margin-bottom: 0.5rem;
+                        color: #e2e8f0;
+                    }
+
+                    .node-title {
+                        font-weight: 600;
+                        font-size: 1.1rem;
+                        color: #fff;
+                        margin-bottom: 0.2rem;
+                    }
+
+                    .node-desc {
+                        font-size: 0.8rem;
+                        color: #8b949e;
+                        margin: 0;
+                    }
+
+                    .flow-arrow {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: rgba(13, 110, 253, 0.6);
+                        font-size: 1.5rem;
+                        animation: pulse-arrow 2s infinite;
+                    }
+
+                    .arrow-down {
+                        flex-direction: column;
+                        height: 40px;
+                        margin: 10px 0;
+                    }
+
+                    @keyframes pulse-arrow {
+                        0% {
+                            opacity: 0.4;
+                        }
+
+                        50% {
+                            opacity: 1;
+                            text-shadow: 0 0 10px rgba(13, 110, 253, 0.8);
+                        }
+
+                        100% {
+                            opacity: 0.4;
+                        }
+                    }
+                </style>
+
+                <!-- Level 1: Proxy -->
+                <div class="row justify-content-center mb-2">
+                    <div class="col-md-5">
+                        <div class="diagram-node" style="border-top: 3px solid #198754;">
+                            <div class="node-icon"><i class="bi bi-hdd-network text-success"></i></div>
+                            <div class="node-title">Nginx Gateway</div>
+                            <p class="node-desc">TLS/SSL Termination & Reverse Proxy</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrow Down -->
+                <div class="row justify-content-center">
+                    <div class="col-12 flow-arrow arrow-down"><i class="bi bi-arrow-down"></i></div>
+                </div>
+
+                <!-- Level 2: Core Routing -->
+                <div class="row justify-content-center g-4 mb-2">
+                    <div class="col-md-4">
+                        <div class="diagram-node">
+                            <div class="node-icon"><i class="bi bi-shield-lock text-primary"></i></div>
+                            <div class="node-title">Keycloak IdP</div>
+                            <p class="node-desc">OIDC Auth & RBAC</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="diagram-node" style="border-bottom: 3px solid #0d6efd;">
+                            <div class="node-icon"><i class="bi bi-braces text-light"></i></div>
+                            <div class="node-title">Flask Application</div>
+                            <p class="node-desc">IAM Logic & Dashboards</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="diagram-node">
+                            <div class="node-icon"><i class="bi bi-activity text-warning"></i></div>
+                            <div class="node-title">Kibana SIEM</div>
+                            <p class="node-desc">Log Visualization</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrows Down -->
+                <div class="row justify-content-center g-4">
+                    <div class="col-md-4 flow-arrow arrow-down"><i class="bi bi-arrow-down"></i></div>
+                    <div class="col-md-4 flow-arrow arrow-down"><i class="bi bi-arrow-down"></i></div>
+                    <div class="col-md-4 flow-arrow arrow-down"><i class="bi bi-arrow-up"></i></div>
+                </div>
+
+                <!-- Level 3: Data Layer -->
+                <div class="row justify-content-center g-4">
+                    <div class="col-md-4">
+                        <div class="diagram-node text-center" style="border-style: dashed;">
+                            <div class="node-icon"><i class="bi bi-database text-secondary"></i></div>
+                            <div class="node-title">PostgreSQL</div>
+                            <p class="node-desc">Keycloak Database</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="diagram-node text-center" style="border-style: dashed;">
+                            <div class="node-icon"><i class="bi bi-safe text-info"></i></div>
+                            <div class="node-title">OpenBao</div>
+                            <p class="node-desc">Secrets Engine</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="diagram-node text-center" style="border-style: dashed;">
+                            <div class="node-icon"><i class="bi bi-search text-warning"></i></div>
+                            <div class="node-title">Elasticsearch</div>
+                            <p class="node-desc">Filebeat Ingestion</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -233,7 +421,7 @@
         <div class="container">
             <p class="mb-1 small">
                 <i class="bi bi-shield-lock-fill me-1 text-primary"></i>
-                Zero Trust Identity Lab &mdash; Portfolio Project
+                Zero Trust Identity Lab
             </p>
             <p class="mb-0 small text-secondary">
                 Keycloak 24 &bull; OpenBao 2.0 &bull; Nginx 1.25 &bull; ELK 8.13
@@ -243,4 +431,5 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

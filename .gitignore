@@ -1,5 +1,7 @@
 # ── Environment secrets ──
 .env
+.env.*
+!.env.example
 
 # ── TLS certificates (generated locally) ──
 nginx/ssl/*.crt
@@ -9,26 +11,37 @@ nginx/ssl/*.key
 postgres_data/
 openbao_data/
 elasticsearch_data/
+flask_iam_data/
+keycloak_data/
+logs/
+*.log
+*.sqlite3
 
 # ── Python ──
 __pycache__/
 *.pyc
 *.pyo
-.venv/
+*.pyd
+.Python
+env/
 venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
 
-# ── IDE ──
+# ── IDE & Editor ──
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# ── OS ──
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# ── Logs ──
-*.log
-logs/
+# ── Project Specific local tracking ──
+!docs/screenshots/
+docs/screenshots/*
+!docs/screenshots/.gitkeep
+showoff-plan.md
+audit-iam.py
