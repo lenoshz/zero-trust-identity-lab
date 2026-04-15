@@ -24,46 +24,7 @@ This project is a fully containerized, single-command deployment that mirrors th
 
 ## Architecture
 
-```
-                           ┌───────────────────────────────────────────────────────┐
-                           │              ZERO TRUST BOUNDARY                      │
-   ┌──────────┐            │                                                       │
-   │          │   HTTPS    │  ┌───────────────────────────────────────────────┐    │
-   │ Browser  │ ─────────► │  │           Nginx (TLS Gateway)                │    │
-   │ (User)   │  :443      │  │     Security Headers · JSON Logs             │    │
-   │          │ ◄───────── │  └──────┬──────────┬──────────┬─────────────────┘    │
-   └──────────┘            │         │          │          │                      │
-                           │         ▼          ▼          ▼                      │
-                           │  ┌──────────┐ ┌──────────────────────┐ ┌────────┐   │
-                           │  │ Keycloak │ │      Flask App       │ │ Kibana │   │
-                           │  │  (IdP)   │ │  ┌────────────────┐  │ │ (SIEM) │   │
-                           │  │ OIDC/SSO │ │  │  IAM Workflow   │  │ │ :5601  │   │
-                           │  │ :8080    │ │  │  Engine (JML)   │  │ │        │   │
-                           │  │          │ │  │  Access Reviews │  │ │        │   │
-                           │  │          │ │  │  MFA Enforcer   │  │ │        │   │
-                           │  │          │ │  │  SIEM Logger    │  │ │        │   │
-                           │  │          │ │  │  KPI Metrics    │  │ │        │   │
-                           │  │          │ │  └────────────────┘  │ │        │   │
-                           │  │          │ │  :5000               │ │        │   │
-                           │  └────┬─────┘ └───┬──────────────────┘ └───┬────┘   │
-                           │       │           │                       │         │
-                           │       ▼           ▼                       │         │
-                           │  ┌──────────┐ ┌─────────┐ ┌──────────┐   │         │
-                           │  │PostgreSQL│ │ OpenBao │ │ SQLite   │   │         │
-                           │  │  (DB)    │ │(Secrets)│ │(IAM Data)│   │         │
-                           │  │ :5432    │ │ :8200   │ │          │   │         │
-                           │  └──────────┘ └─────────┘ └──────────┘   │         │
-                           │                                           │         │
-                           │  ┌────────────────────────────────────────┴───┐    │
-                           │  │    Filebeat → Elasticsearch :9200          │    │
-                           │  │    (Log Pipeline)                           │    │
-                           │  └────────────────────────────────────────────┘    │
-                           └───────────────────────────────────────────────────────┘
-
-Network Isolation:
-  identity-net     ──── Keycloak, Flask, Nginx, PostgreSQL, OpenBao, SQLite
-  monitoring-net   ──── Elasticsearch, Kibana, Filebeat, Nginx
-```
+<img width="1050" height="1240" alt="iam archi" src="https://github.com/user-attachments/assets/70019109-bf74-48d0-98fb-5f0c7937a735" />
 
 > 📘 See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed technical breakdown of each component and data flow.
 
