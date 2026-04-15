@@ -144,57 +144,7 @@ The Flask app demonstrates the complete authentication and secrets flow:
 
 The following sequence describes the OpenID Connect authorization code flow used in this lab:
 
-```
-┌──────┐     ┌───────┐      ┌──────────┐      ┌──────────┐
-│Browser│     │ Nginx │      │  Flask   │      │ Keycloak │
-└──┬───┘     └──┬────┘      └───┬──────┘      └───┬──────┘
-   │            │               │                  │
-   │ 1. GET /app/dashboard     │                  │
-   │ ──────────►│               │                  │
-   │            │ 2. Proxy      │                  │
-   │            │──────────────►│                  │
-   │            │               │                  │
-   │            │  3. No token → 302 Redirect     │
-   │ ◄──────────┼───────────────┤                  │
-   │            │               │                  │
-   │ 4. GET /auth/realms/.../auth?client_id=...   │
-   │ ─────────────────────────────────────────────►│
-   │            │               │                  │
-   │            │     5. Keycloak Login Page       │
-   │ ◄─────────────────────────────────────────────┤
-   │            │               │                  │
-   │ 6. POST credentials (username/password)      │
-   │ ─────────────────────────────────────────────►│
-   │            │               │                  │
-   │            │     7. Validate + Issue Code     │
-   │ ◄──────────┼───────────────┼──────────────────┤
-   │            │               │     (302 + auth code)
-   │ 8. GET /app/callback?code=...                │
-   │ ──────────►│               │                  │
-   │            │──────────────►│                  │
-   │            │               │                  │
-   │            │               │ 9. Exchange code │
-   │            │               │    for tokens    │
-   │            │               │─────────────────►│
-   │            │               │                  │
-   │            │               │ 10. JWT tokens   │
-   │            │               │◄─────────────────┤
-   │            │               │  (access_token,  │
-   │            │               │   id_token,      │
-   │            │               │   refresh_token) │
-   │            │               │                  │
-   │            │ 11. Store in  │                  │
-   │            │     session   │                  │
-   │            │               │                  │
-   │  12. 302 → /app/dashboard │                  │
-   │ ◄──────────┼───────────────┤                  │
-   │            │               │                  │
-   │ 13. GET /app/dashboard (with session)        │
-   │ ──────────►│──────────────►│                  │
-   │            │               │                  │
-   │  14. Dashboard HTML with user info           │
-   │ ◄──────────┼───────────────┤                  │
-```
+<img width="775" height="580" alt="11111" src="https://github.com/user-attachments/assets/c5e3dae2-95ce-4de6-b1f2-4794db01876e" />
 
 ### Key Security Properties
 
@@ -208,32 +158,7 @@ The following sequence describes the OpenID Connect authorization code flow used
 
 ## Secrets Management Flow
 
-```
-┌──────────┐      ┌───────────┐
-│  Flask   │      │  OpenBao  │
-│   App    │      │  (Vault)  │
-└───┬──────┘      └───┬───────┘
-    │                 │
-    │ 1. GET /v1/secret/data/flask-app/config
-    │    Header: X-Vault-Token: <token>
-    │────────────────►│
-    │                 │
-    │                 │ 2. Validate token
-    │                 │    Check policy
-    │                 │    (flask-app-policy allows read)
-    │                 │
-    │ 3. 200 OK      │
-    │  { "data": {   │
-    │    "environment": "production",
-    │    "debug": "false",
-    │    "log_level": "INFO"
-    │  }}             │
-    │◄────────────────┤
-    │                 │
-    │ 4. Store in memory
-    │    Display masked on dashboard
-    │    (pr****ion, fa**e, IN**)
-```
+<img width="775" height="580" alt="11112" src="https://github.com/user-attachments/assets/a41df6cf-e19b-45c5-900d-adad3250274f" />
 
 ### Security Properties
 
@@ -247,47 +172,7 @@ The following sequence describes the OpenID Connect authorization code flow used
 
 ## Log Pipeline Flow
 
-```
-┌──────────┐    ┌──────────┐    ┌───────────────┐    ┌──────────┐
-│ Keycloak │    │  Nginx   │    │   Filebeat    │    │  Elastic │
-│  Events  │    │   Logs   │    │  (Shipper)    │    │  Search  │
-└───┬──────┘    └───┬──────┘    └──────┬────────┘    └───┬──────┘
-    │               │                  │                 │
-    │ 1. Login      │                  │                 │
-    │    event      │ 2. Access        │                 │
-    │    written    │    log (JSON)    │                 │
-    │    to file    │    written       │                 │
-    │               │                  │                 │
-    ▼               ▼                  │                 │
-  /var/log/       /var/log/           │                 │
-  keycloak/       nginx/              │                 │
-  keycloak.log    access.log          │                 │
-    │               │                  │                 │
-    └───────────────┘                  │                 │
-              │                        │                 │
-              │  3. Filebeat tails     │                 │
-              │     log files          │                 │
-              └───────────────────────►│                 │
-                                       │                 │
-                                       │ 4. Parse JSON   │
-                                       │    Add fields   │
-                                       │    (source=...)  │
-                                       │                 │
-                                       │ 5. Ship to ES   │
-                                       │────────────────►│
-                                       │                 │
-                                       │                 │ 6. Index as
-                                       │                 │    zerotrust-
-                                       │                 │    logs-*
-                                       │                 │
-                                       │                 ▼
-                                       │            ┌──────────┐
-                                       │            │  Kibana  │
-                                       │            │  (SIEM)  │
-                                       │            └──────────┘
-                                       │              7. Visualize
-                                       │                 dashboards
-```
+<img width="775" height="580" alt="11113" src="https://github.com/user-attachments/assets/41153470-a94c-48d0-80dc-e220c120e4ba" />
 
 ### Event Types Captured
 
@@ -305,6 +190,8 @@ The following sequence describes the OpenID Connect authorization code flow used
 ---
 
 ## Network Isolation
+
+<img width="775" height="580" alt="11114" src="https://github.com/user-attachments/assets/1a386495-f616-49ec-aee0-5447527dc4e6" />
 
 Docker networks enforce microsegmentation — a key Zero Trust principle:
 
