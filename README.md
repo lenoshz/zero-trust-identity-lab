@@ -48,29 +48,7 @@ This lab models how enterprise Identity & Access Management works in practice. H
 
 ### JML Lifecycle Flow
 
-```
-   Joiner                    Mover                      Leaver
-  ┌─────────┐            ┌───────────┐             ┌──────────┐
-  │ Create  │            │ Transfer  │             │ Disable  │
-  │ user    │            │ department│             │ user     │
-  │ profile │            │           │             │ account  │
-  └────┬────┘            └─────┬─────┘             └────┬─────┘
-       │                       │                        │
-       ▼                       ▼                        ▼
-  ┌─────────┐            ┌───────────┐             ┌──────────┐
-  │ Auto-   │            │ Recompute │             │ Revoke   │
-  │ assign  │            │ role from │             │ all      │
-  │ baseline│            │ dept map  │             │ roles    │
-  │ role    │            │           │             │          │
-  └────┬────┘            └─────┬─────┘             └────┬─────┘
-       │                       │                        │
-       ▼                       ▼                        ▼
-  ┌─────────┐            ┌───────────┐             ┌──────────┐
-  │ Log JML │            │ Log JML   │             │ Log JML  │
-  │ event + │            │ event +   │             │ event +  │
-  │ SIEM    │            │ SIEM      │             │ SIEM     │
-  └─────────┘            └───────────┘             └──────────┘
-```
+![JML Lifecycle Flow](./docs/jml-lifecycle-flow.svg)
 
 ---
 
