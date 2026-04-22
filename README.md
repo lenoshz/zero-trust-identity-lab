@@ -24,7 +24,7 @@ This project is a fully containerized, single-command deployment that mirrors th
 
 ## Architecture
 
-<img width="650" height="840" alt="iam archi" src="https://github.com/user-attachments/assets/70019109-bf74-48d0-98fb-5f0c7937a735" />
+![Architecture Diagram](./docs/architecture-diagram.svg)
 
 > 📘 See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed technical breakdown of each component and data flow.
 
